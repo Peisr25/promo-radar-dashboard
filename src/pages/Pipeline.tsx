@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,6 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Sparkles, Copy, Check, Send } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+import {
+  ScrapeFilters,
+  type SortOption,
+  type DiscountFilter,
+  type PriceTypeFilter,
+  type PriceRangeFilter,
+} from "@/components/pipeline/ScrapeFilters";
 
 type Promotion = Tables<"promotions">;
 
@@ -37,6 +44,12 @@ export default function Pipeline() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<number | null>(null);
 
+  // Filter & sort state
+  const [sortBy, setSortBy] = useState<SortOption>("discount");
+  const [filterDiscount, setFilterDiscount] = useState<DiscountFilter>("all");
+  const [filterPriceType, setFilterPriceType] = useState<PriceTypeFilter>("all");
+  const [filterPriceRange, setFilterPriceRange] = useState<PriceRangeFilter>("all");
+
   const fetchAll = async () => {
     const [s, r, q] = await Promise.all([
       supabase.from("raw_scrapes").select("*").eq("status", "pending").order("created_at", { ascending: false }),
@@ -50,6 +63,49 @@ export default function Pipeline() {
   };
 
   useEffect(() => { fetchAll(); }, [user]);
+
+  const filteredScrapes = useMemo(() => {
+    let filtered = [...scrapes];
+
+    if (filterDiscount !== "all") {
+      const min = parseInt(filterDiscount);
+      filtered = filtered.filter(s => parseInt(s.discount_percentage ?? "0") >= min);
+    }
+    if (filterPriceType !== "all") {
+      filtered = filtered.filter(s => s.price_type === filterPriceType);
+    }
+    if (filterPriceRange !== "all") {
+      filtered = filtered.filter(s => {
+        const p = s.price ?? 0;
+        switch (filterPriceRange) {
+          case "0-50": return p <= 50;
+          case "50-100": return p > 50 && p <= 100;
+          case "100-500": return p > 100 && p <= 500;
+          case "500+": return p > 500;
+          default: return true;
+        }
+      });
+    }
+
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "discount":
+          return parseInt(b.discount_percentage ?? "0") - parseInt(a.discount_percentage ?? "0");
+        case "price":
+          return (a.price ?? 0) - (b.price ?? 0);
+        case "rating":
+          return parseFloat(b.rating ?? "0") - parseFloat(a.rating ?? "0");
+        case "recent":
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case "savings":
+          return ((b.old_price ?? 0) - (b.price ?? 0)) - ((a.old_price ?? 0) - (a.price ?? 0));
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [scrapes, sortBy, filterDiscount, filterPriceType, filterPriceRange]);
 
   const processPromotion = async (scrape: RawScrape) => {
     if (!user) return;
@@ -115,12 +171,31 @@ export default function Pipeline() {
         </TabsList>
 
         <TabsContent value="new">
-          {scrapes.length === 0 ? (
-            <Card><CardContent className="p-8 text-center text-muted-foreground">Nenhum produto novo encontrado.</CardContent></Card>
+          <ScrapeFilters
+            sortBy={sortBy} onSortChange={setSortBy}
+            filterDiscount={filterDiscount} onFilterDiscountChange={setFilterDiscount}
+            filterPriceType={filterPriceType} onFilterPriceTypeChange={setFilterPriceType}
+            filterPriceRange={filterPriceRange} onFilterPriceRangeChange={setFilterPriceRange}
+            filteredCount={filteredScrapes.length} totalCount={scrapes.length}
+          />
+
+          {filteredScrapes.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                {scrapes.length === 0
+                  ? "Nenhum produto novo encontrado."
+                  : "Nenhum produto corresponde aos filtros selecionados."}
+              </CardContent>
+            </Card>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {scrapes.map((s) => (
+              {filteredScrapes.map((s, index) => (
                 <Card key={s.id} className="overflow-hidden">
+                  {sortBy === "discount" && index < 3 && (
+                    <div className="bg-primary/10 text-primary text-xs font-bold text-center py-1">
+                      🔥 TOP {index + 1} DESCONTO
+                    </div>
+                  )}
                   {s.image_url && (
                     <div className="aspect-video w-full overflow-hidden bg-muted">
                       <img src={s.image_url} alt={s.product_title ?? ""} className="h-full w-full object-contain" />
