@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Copy, Check, Send, RefreshCw } from "lucide-react";
+import { Loader2, Sparkles, Copy, Check, Send, RefreshCw, Link } from "lucide-react";
+import { shortenLink } from "@/lib/link-shortener";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   ScrapeFilters,
@@ -125,8 +126,21 @@ export default function Pipeline() {
   const processPromotion = async (scrape: RawScrape) => {
     if (!user) return;
     setProcessing(scrape.id);
-    toast({ title: "⏳ Gerando mensagem criativa com IA..." });
 
+    // 1. Shorten link
+    toast({ title: "🔗 Encurtando link..." });
+    const { shortUrl, shortCode, error: linkError } = await shortenLink({
+      originalUrl: scrape.original_url ?? "",
+    });
+
+    if (linkError) {
+      toast({ title: "Erro ao encurtar link", description: linkError, variant: "destructive" });
+      setProcessing(null);
+      return;
+    }
+
+    // 2. Generate AI message with short link
+    toast({ title: "⏳ Gerando mensagem criativa com IA..." });
     const aiMessage = await generateMessage({
       product_title: scrape.product_title ?? "Sem título",
       price: scrape.price ?? 0,
@@ -135,7 +149,7 @@ export default function Pipeline() {
       rating: scrape.rating,
       installments: scrape.installments,
       price_type: scrape.price_type,
-      original_url: scrape.original_url ?? "",
+      original_url: shortUrl, // Use short link
     });
 
     const { error } = await supabase.from("promotions").insert({
@@ -145,6 +159,7 @@ export default function Pipeline() {
       promo_price: scrape.price,
       original_price: scrape.old_price,
       product_url: scrape.original_url,
+      short_link_code: shortCode,
       ai_message: aiMessage,
       status: "review",
     });
