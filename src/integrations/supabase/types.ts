@@ -231,27 +231,39 @@ export type Database = {
           click_count: number
           created_at: string
           id: string
+          is_active: boolean
+          last_clicked_at: string | null
           original_url: string
+          product_title: string | null
           promotion_id: string | null
           short_code: string
+          source: string | null
           user_id: string
         }
         Insert: {
           click_count?: number
           created_at?: string
           id?: string
+          is_active?: boolean
+          last_clicked_at?: string | null
           original_url: string
+          product_title?: string | null
           promotion_id?: string | null
           short_code: string
+          source?: string | null
           user_id: string
         }
         Update: {
           click_count?: number
           created_at?: string
           id?: string
+          is_active?: boolean
+          last_clicked_at?: string | null
           original_url?: string
+          product_title?: string | null
           promotion_id?: string | null
           short_code?: string
+          source?: string | null
           user_id?: string
         }
         Relationships: [
