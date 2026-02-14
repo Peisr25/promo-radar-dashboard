@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Copy, Check, Send } from "lucide-react";
+import { Loader2, Sparkles, Copy, Check, Send, RefreshCw } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   ScrapeFilters,
@@ -107,9 +107,37 @@ export default function Pipeline() {
     return filtered;
   }, [scrapes, sortBy, filterDiscount, filterPriceType, filterPriceRange]);
 
+  const generateMessage = async (productData: {
+    product_title: string; price: number; old_price?: number | null;
+    discount_percentage?: string | null; rating?: string | null;
+    installments?: string | null; price_type?: string | null; original_url: string;
+  }) => {
+    const { data, error } = await supabase.functions.invoke("generate-promo-message", {
+      body: productData,
+    });
+    if (error) {
+      console.error("AI generation error:", error);
+      return null;
+    }
+    return data?.message as string | null;
+  };
+
   const processPromotion = async (scrape: RawScrape) => {
     if (!user) return;
     setProcessing(scrape.id);
+    toast({ title: "⏳ Gerando mensagem criativa com IA..." });
+
+    const aiMessage = await generateMessage({
+      product_title: scrape.product_title ?? "Sem título",
+      price: scrape.price ?? 0,
+      old_price: scrape.old_price,
+      discount_percentage: scrape.discount_percentage,
+      rating: scrape.rating,
+      installments: scrape.installments,
+      price_type: scrape.price_type,
+      original_url: scrape.original_url ?? "",
+    });
+
     const { error } = await supabase.from("promotions").insert({
       user_id: user.id,
       product_name: scrape.product_title ?? "Sem título",
@@ -117,10 +145,14 @@ export default function Pipeline() {
       promo_price: scrape.price,
       original_price: scrape.old_price,
       product_url: scrape.original_url,
+      ai_message: aiMessage,
       status: "review",
     });
     if (!error) {
       await supabase.from("raw_scrapes").update({ status: "processed" }).eq("id", scrape.id);
+      toast({ title: "Mensagem gerada com sucesso! 🎉" });
+    } else {
+      toast({ title: "Erro ao processar", description: error.message, variant: "destructive" });
     }
     setProcessing(null);
     fetchAll();
@@ -267,9 +299,26 @@ export default function Pipeline() {
                           }}
                           rows={6}
                         />
-                        <div className="flex gap-2">
-                          <Button variant="outline" onClick={() => copyMessage(p.ai_message ?? "")}><Copy className="mr-2 h-4 w-4" /> Copiar</Button>
-                          <Button onClick={() => moveToQueue(p.id)}><Check className="mr-2 h-4 w-4" /> Aprovar e Enviar para Fila</Button>
+                        <div className="flex gap-2 flex-wrap">
+                          <Button variant="outline" size="sm" onClick={async () => {
+                            toast({ title: "⏳ Regenerando mensagem..." });
+                            const msg = await generateMessage({
+                              product_title: p.product_name,
+                              price: p.promo_price ?? 0,
+                              old_price: p.original_price,
+                              discount_percentage: p.original_price && p.promo_price
+                                ? String(Math.round((1 - p.promo_price / p.original_price) * 100))
+                                : null,
+                              original_url: p.product_url ?? "",
+                            });
+                            if (msg) {
+                              setReviewItems((prev) => prev.map((i) => i.id === p.id ? { ...i, ai_message: msg } : i));
+                              updateAiMessage(p.id, msg);
+                              toast({ title: "Mensagem regenerada! 🎉" });
+                            }
+                          }}><RefreshCw className="mr-2 h-4 w-4" /> Regenerar</Button>
+                          <Button variant="outline" size="sm" onClick={() => copyMessage(p.ai_message ?? "")}><Copy className="mr-2 h-4 w-4" /> Copiar</Button>
+                          <Button size="sm" onClick={() => moveToQueue(p.id)}><Check className="mr-2 h-4 w-4" /> Aprovar e Enviar para Fila</Button>
                         </div>
                       </div>
                     </div>
