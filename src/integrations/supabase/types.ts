@@ -106,31 +106,49 @@ export type Database = {
       raw_scrapes: {
         Row: {
           created_at: string
+          discount_percentage: string | null
           id: number
           image_url: string | null
+          installments: string | null
+          metadata: Json | null
+          old_price: number | null
           original_url: string | null
           price: number | null
+          price_type: string | null
           product_title: string | null
+          rating: string | null
           source: string | null
           status: string
         }
         Insert: {
           created_at?: string
+          discount_percentage?: string | null
           id?: never
           image_url?: string | null
+          installments?: string | null
+          metadata?: Json | null
+          old_price?: number | null
           original_url?: string | null
           price?: number | null
+          price_type?: string | null
           product_title?: string | null
+          rating?: string | null
           source?: string | null
           status?: string
         }
         Update: {
           created_at?: string
+          discount_percentage?: string | null
           id?: never
           image_url?: string | null
+          installments?: string | null
+          metadata?: Json | null
+          old_price?: number | null
           original_url?: string | null
           price?: number | null
+          price_type?: string | null
           product_title?: string | null
+          rating?: string | null
           source?: string | null
           status?: string
         }
@@ -248,7 +266,66 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vw_raw_scrapes_detailed: {
+        Row: {
+          created_at: string | null
+          current_price: number | null
+          discount_category: string | null
+          discount_percentage: string | null
+          has_discount: boolean | null
+          id: number | null
+          image_url: string | null
+          installments: string | null
+          metadata: Json | null
+          old_price: number | null
+          original_url: string | null
+          price_type: string | null
+          product_title: string | null
+          rating: string | null
+          savings_amount: number | null
+          source: string | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_price?: number | null
+          discount_category?: never
+          discount_percentage?: string | null
+          has_discount?: never
+          id?: number | null
+          image_url?: string | null
+          installments?: string | null
+          metadata?: Json | null
+          old_price?: number | null
+          original_url?: string | null
+          price_type?: string | null
+          product_title?: string | null
+          rating?: string | null
+          savings_amount?: never
+          source?: string | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_price?: number | null
+          discount_category?: never
+          discount_percentage?: string | null
+          has_discount?: never
+          id?: number | null
+          image_url?: string | null
+          installments?: string | null
+          metadata?: Json | null
+          old_price?: number | null
+          original_url?: string | null
+          price_type?: string | null
+          product_title?: string | null
+          rating?: string | null
+          savings_amount?: never
+          source?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       owns_short_link: { Args: { link_id: string }; Returns: boolean }
