@@ -12,6 +12,8 @@ function generateShortCode(): string {
 export async function shortenLink(params: {
   originalUrl: string;
   promotionId?: string;
+  productTitle?: string;
+  source?: string;
 }): Promise<{ shortCode: string; shortUrl: string; error?: string }> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -52,7 +54,9 @@ export async function shortenLink(params: {
       original_url: params.originalUrl,
       short_code: shortCode,
       promotion_id: params.promotionId ?? null,
-    })
+      product_title: params.productTitle ?? null,
+      source: params.source ?? null,
+    } as any)
     .select("short_code")
     .single();
 

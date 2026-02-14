@@ -131,6 +131,8 @@ export default function Pipeline() {
     toast({ title: "🔗 Encurtando link..." });
     const { shortUrl, shortCode, error: linkError } = await shortenLink({
       originalUrl: scrape.original_url ?? "",
+      productTitle: scrape.product_title ?? undefined,
+      source: scrape.source ?? undefined,
     });
 
     if (linkError) {
