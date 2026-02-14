@@ -101,65 +101,40 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "promotions_raw_scrape_id_fkey"
-            columns: ["raw_scrape_id"]
-            isOneToOne: false
-            referencedRelation: "raw_scrapes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       raw_scrapes: {
         Row: {
           created_at: string
-          id: string
-          original_price: number | null
-          processed: boolean
-          product_image_url: string | null
-          product_name: string
-          product_url: string | null
-          promo_price: number | null
-          scraped_at: string
-          source_id: string | null
-          user_id: string
+          id: number
+          image_url: string | null
+          original_url: string | null
+          price: number | null
+          product_title: string | null
+          source: string | null
+          status: string
         }
         Insert: {
           created_at?: string
-          id?: string
-          original_price?: number | null
-          processed?: boolean
-          product_image_url?: string | null
-          product_name: string
-          product_url?: string | null
-          promo_price?: number | null
-          scraped_at?: string
-          source_id?: string | null
-          user_id: string
+          id?: never
+          image_url?: string | null
+          original_url?: string | null
+          price?: number | null
+          product_title?: string | null
+          source?: string | null
+          status?: string
         }
         Update: {
           created_at?: string
-          id?: string
-          original_price?: number | null
-          processed?: boolean
-          product_image_url?: string | null
-          product_name?: string
-          product_url?: string | null
-          promo_price?: number | null
-          scraped_at?: string
-          source_id?: string | null
-          user_id?: string
+          id?: never
+          image_url?: string | null
+          original_url?: string | null
+          price?: number | null
+          product_title?: string | null
+          source?: string | null
+          status?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "raw_scrapes_source_id_fkey"
-            columns: ["source_id"]
-            isOneToOne: false
-            referencedRelation: "scraper_sources"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       scraper_sources: {
         Row: {

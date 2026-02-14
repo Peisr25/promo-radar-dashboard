@@ -1,4 +1,4 @@
-import { LayoutDashboard, Globe, GitBranch, Settings, LogOut, Radar } from "lucide-react";
+import { LayoutDashboard, Globe, GitBranch, Settings, LogOut, Radar, ScrollText } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -19,6 +19,7 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Fontes", url: "/sources", icon: Globe },
   { title: "Pipeline", url: "/pipeline", icon: GitBranch },
+  { title: "Scraper Logs", url: "/scraper-logs", icon: ScrollText },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 

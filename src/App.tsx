@@ -10,6 +10,7 @@ import Dashboard from "@/pages/Dashboard";
 import Sources from "@/pages/Sources";
 import Pipeline from "@/pages/Pipeline";
 import SettingsPage from "@/pages/Settings";
+import ScraperLogs from "@/pages/ScraperLogs";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
               <Route path="/sources" element={<Sources />} />
               <Route path="/pipeline" element={<Pipeline />} />
+              <Route path="/scraper-logs" element={<ScraperLogs />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />

@@ -10,8 +10,18 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Sparkles, Copy, Check, Send } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
-type RawScrape = Tables<"raw_scrapes">;
 type Promotion = Tables<"promotions">;
+
+interface RawScrape {
+  id: number;
+  created_at: string;
+  product_title: string | null;
+  original_url: string | null;
+  price: number | null;
+  image_url: string | null;
+  source: string | null;
+  status: string;
+}
 
 export default function Pipeline() {
   const { user } = useAuth();
@@ -20,15 +30,15 @@ export default function Pipeline() {
   const [reviewItems, setReviewItems] = useState<Promotion[]>([]);
   const [queueItems, setQueueItems] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState<string | null>(null);
+  const [processing, setProcessing] = useState<number | null>(null);
 
   const fetchAll = async () => {
     const [s, r, q] = await Promise.all([
-      supabase.from("raw_scrapes").select("*").eq("processed", false).order("scraped_at", { ascending: false }),
+      supabase.from("raw_scrapes").select("*").eq("status", "pending").order("created_at", { ascending: false }),
       supabase.from("promotions").select("*").eq("status", "review").order("created_at", { ascending: false }),
       supabase.from("promotions").select("*").in("status", ["queued", "sent", "error"]).order("created_at", { ascending: false }),
     ]);
-    setScrapes(s.data ?? []);
+    setScrapes((s.data as RawScrape[]) ?? []);
     setReviewItems(r.data ?? []);
     setQueueItems(q.data ?? []);
     setLoading(false);
@@ -41,16 +51,14 @@ export default function Pipeline() {
     setProcessing(scrape.id);
     const { error } = await supabase.from("promotions").insert({
       user_id: user.id,
-      raw_scrape_id: scrape.id,
-      product_name: scrape.product_name,
-      product_image_url: scrape.product_image_url,
-      original_price: scrape.original_price,
-      promo_price: scrape.promo_price,
-      product_url: scrape.product_url,
+      product_name: scrape.product_title ?? "Sem título",
+      product_image_url: scrape.image_url,
+      promo_price: scrape.price,
+      product_url: scrape.original_url,
       status: "review",
     });
     if (!error) {
-      await supabase.from("raw_scrapes").update({ processed: true }).eq("id", scrape.id);
+      await supabase.from("raw_scrapes").update({ status: "processed" }).eq("id", scrape.id);
     }
     setProcessing(null);
     fetchAll();
@@ -107,16 +115,15 @@ export default function Pipeline() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {scrapes.map((s) => (
                 <Card key={s.id} className="overflow-hidden">
-                  {s.product_image_url && (
+                  {s.image_url && (
                     <div className="aspect-video w-full overflow-hidden bg-muted">
-                      <img src={s.product_image_url} alt={s.product_name} className="h-full w-full object-contain" />
+                      <img src={s.image_url} alt={s.product_title ?? ""} className="h-full w-full object-contain" />
                     </div>
                   )}
                   <CardContent className="p-4 space-y-2">
-                    <h3 className="font-semibold line-clamp-2">{s.product_name}</h3>
+                    <h3 className="font-semibold line-clamp-2">{s.product_title ?? "Sem título"}</h3>
                     <div className="flex items-center gap-2">
-                      {s.original_price && <span className="text-sm text-muted-foreground line-through">{formatPrice(s.original_price)}</span>}
-                      <span className="text-lg font-bold text-primary">{formatPrice(s.promo_price)}</span>
+                      <span className="text-lg font-bold text-primary">{formatPrice(s.price)}</span>
                     </div>
                     <Button className="w-full" onClick={() => processPromotion(s)} disabled={processing === s.id}>
                       {processing === s.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
