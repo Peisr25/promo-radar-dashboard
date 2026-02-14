@@ -17,7 +17,7 @@ export default function Dashboard() {
       const today = new Date().toISOString().split("T")[0];
 
       const [scrapes, links, clicks, sent] = await Promise.all([
-        supabase.from("raw_scrapes").select("id", { count: "exact", head: true }).gte("scraped_at", today),
+        supabase.from("raw_scrapes").select("id", { count: "exact", head: true }).gte("created_at", today),
         supabase.from("short_links").select("id", { count: "exact", head: true }),
         supabase.from("click_logs").select("id", { count: "exact", head: true }),
         supabase.from("promotions").select("id", { count: "exact", head: true }).eq("status", "sent"),
