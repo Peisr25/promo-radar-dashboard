@@ -91,8 +91,10 @@ ESTRATÉGIAS DE HUMOR:
     message += `${product_title}\n`;
     if (old_price && discount > 0) {
       message += `🎟 ~R$ ${formatBRL(Number(old_price))}~ por R$ ${formatBRL(Number(price))} (${discount}% OFF)\n`;
+      message += `💰 R$ ${formattedPrice} ${priceType}\n`;
+    } else {
+      message += `Por R$ ${formattedPrice} ${priceType}\n`;
     }
-    message += `Por R$ ${formattedPrice} ${priceType}\n`;
     if (original_url) {
       message += original_url;
     }
