@@ -359,6 +359,9 @@ export default function Pipeline() {
                         <div className="flex gap-2 flex-wrap">
                           <Button variant="outline" size="sm" onClick={async () => {
                             toast({ title: "⏳ Regenerando mensagem..." });
+                            const shortUrl = p.short_link_code
+                              ? `${window.location.origin}/r/${p.short_link_code}`
+                              : p.product_url ?? "";
                             const msg = await generateMessage({
                               product_title: p.product_name,
                               price: p.promo_price ?? 0,
@@ -366,7 +369,8 @@ export default function Pipeline() {
                               discount_percentage: p.original_price && p.promo_price
                                 ? String(Math.round((1 - p.promo_price / p.original_price) * 100))
                                 : null,
-                              original_url: p.product_url ?? "",
+                              price_type: null,
+                              original_url: shortUrl,
                             });
                             if (msg) {
                               setReviewItems((prev) => prev.map((i) => i.id === p.id ? { ...i, ai_message: msg } : i));

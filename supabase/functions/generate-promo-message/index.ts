@@ -85,12 +85,14 @@ ESTRATÉGIAS DE HUMOR:
     const creativeTitle = (data.choices?.[0]?.message?.content?.trim().toUpperCase() ?? "PROMOÇÃO IMPERDÍVEL");
 
     // Build the full message
+    const formatBRL = (v: number) => v.toFixed(2).replace(".", ",");
+
     let message = `${medal} ${creativeTitle}\n`;
     message += `${product_title}\n`;
-    if (discount > 0) {
-      message += `🎟 Desconto de ${discount}% aplicado automaticamente\n`;
+    if (old_price && discount > 0) {
+      message += `🎟 De R$ ${formatBRL(Number(old_price))} por R$ ${formatBRL(Number(price))} (${discount}% OFF)\n`;
     }
-    message += `Por ${formattedPrice} ${priceType}\n`;
+    message += `Por R$ ${formattedPrice} ${priceType}\n`;
     if (original_url) {
       message += original_url;
     }
