@@ -49,6 +49,45 @@ export type Database = {
           },
         ]
       }
+      evolution_config: {
+        Row: {
+          api_key: string
+          api_url: string
+          created_at: string
+          id: string
+          instance_name: string
+          is_active: boolean | null
+          last_test_at: string | null
+          last_test_status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_key: string
+          api_url: string
+          created_at?: string
+          id?: string
+          instance_name: string
+          is_active?: boolean | null
+          last_test_at?: string | null
+          last_test_status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_key?: string
+          api_url?: string
+          created_at?: string
+          id?: string
+          instance_name?: string
+          is_active?: boolean | null
+          last_test_at?: string | null
+          last_test_status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       promotions: {
         Row: {
           ai_message: string | null
@@ -276,6 +315,96 @@ export type Database = {
           },
         ]
       }
+      whatsapp_groups: {
+        Row: {
+          created_at: string
+          group_description: string | null
+          group_id: string
+          group_name: string
+          id: string
+          is_active: boolean | null
+          last_message_at: string | null
+          messages_sent: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_description?: string | null
+          group_id: string
+          group_name: string
+          id?: string
+          is_active?: boolean | null
+          last_message_at?: string | null
+          messages_sent?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          group_description?: string | null
+          group_id?: string
+          group_name?: string
+          id?: string
+          is_active?: boolean | null
+          last_message_at?: string | null
+          messages_sent?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_messages_log: {
+        Row: {
+          api_response: Json | null
+          created_at: string
+          error_message: string | null
+          group_id: string | null
+          id: string
+          message_text: string
+          promotion_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          api_response?: Json | null
+          created_at?: string
+          error_message?: string | null
+          group_id?: string | null
+          id?: string
+          message_text: string
+          promotion_id?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          api_response?: Json | null
+          created_at?: string
+          error_message?: string | null
+          group_id?: string | null
+          id?: string
+          message_text?: string
+          promotion_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_log_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_log_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       vw_raw_scrapes_detailed: {
@@ -340,6 +469,10 @@ export type Database = {
       }
     }
     Functions: {
+      increment_group_messages: {
+        Args: { group_id_param: string }
+        Returns: undefined
+      }
       owns_short_link: { Args: { link_id: string }; Returns: boolean }
     }
     Enums: {

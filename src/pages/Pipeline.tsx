@@ -6,10 +6,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Copy, Check, Send, RefreshCw, Link } from "lucide-react";
+import { Loader2, Sparkles, Copy, Check, Send, RefreshCw, Link, MessageCircle } from "lucide-react";
 import { shortenLink } from "@/lib/link-shortener";
+import { sendWhatsAppMessage } from "@/lib/evolution-api";
 import type { Tables } from "@/integrations/supabase/types";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import {
   ScrapeFilters,
   type SortOption,
@@ -44,6 +49,11 @@ export default function Pipeline() {
   const [queueItems, setQueueItems] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<number | null>(null);
+  const [whatsappGroups, setWhatsappGroups] = useState<any[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendingPromotion, setSendingPromotion] = useState<Promotion | null>(null);
+  const [sending, setSending] = useState(false);
 
   // Filter & sort state
   const [sortBy, setSortBy] = useState<SortOption>("discount");
@@ -64,6 +74,54 @@ export default function Pipeline() {
   };
 
   useEffect(() => { fetchAll(); }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("whatsapp_groups").select("*").eq("user_id", user.id).eq("is_active", true).order("group_name")
+      .then(({ data }) => { if (data) setWhatsappGroups(data); });
+  }, [user]);
+
+  const openSendDialog = (promo: Promotion) => {
+    setSendingPromotion(promo);
+    setSelectedGroups([]);
+    setSendDialogOpen(true);
+  };
+
+  const handleSendToWhatsApp = async () => {
+    if (!sendingPromotion || !user || selectedGroups.length === 0) return;
+    setSending(true);
+    let ok = 0, fail = 0;
+    for (const gId of selectedGroups) {
+      const group = whatsappGroups.find((g) => g.id === gId);
+      if (!group) continue;
+      const result = await sendWhatsAppMessage(group.group_id, sendingPromotion.ai_message ?? "");
+      // Log
+      await supabase.from("whatsapp_messages_log").insert({
+        user_id: user.id,
+        promotion_id: sendingPromotion.id,
+        group_id: gId,
+        message_text: sendingPromotion.ai_message ?? "",
+        status: result.success ? "sent" : "failed",
+        error_message: result.success ? null : result.message,
+        api_response: result.data ?? null,
+      });
+      if (result.success) {
+        ok++;
+        await supabase.rpc("increment_group_messages", { group_id_param: gId });
+      } else { fail++; }
+      // Delay between messages
+      if (selectedGroups.indexOf(gId) < selectedGroups.length - 1) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    if (ok > 0 && fail === 0) {
+      await supabase.from("promotions").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", sendingPromotion.id);
+    }
+    setSending(false);
+    setSendDialogOpen(false);
+    toast({ title: "Envio concluído", description: `${ok} enviada(s), ${fail} falha(s)` });
+    fetchAll();
+  };
 
   const filteredScrapes = useMemo(() => {
     let filtered = [...scrapes];
@@ -413,7 +471,12 @@ export default function Pipeline() {
                     <div className="flex gap-1">
                       <Button size="sm" variant="outline" onClick={() => copyMessage(p.ai_message ?? "")}><Copy className="h-4 w-4" /></Button>
                       {p.status === "queued" && (
-                        <Button size="sm" onClick={() => markAsSent(p.id)}><Send className="mr-1 h-4 w-4" /> Enviado</Button>
+                        <>
+                          <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => openSendDialog(p)}>
+                            <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp
+                          </Button>
+                          <Button size="sm" onClick={() => markAsSent(p.id)}><Send className="mr-1 h-4 w-4" /> Enviado</Button>
+                        </>
                       )}
                     </div>
                   </CardContent>
@@ -423,6 +486,56 @@ export default function Pipeline() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* WhatsApp Send Dialog */}
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar para WhatsApp</DialogTitle>
+            <DialogDescription>Selecione os grupos de destino</DialogDescription>
+          </DialogHeader>
+          {sendingPromotion && (
+            <div className="rounded-md bg-muted p-3 text-sm max-h-32 overflow-y-auto">
+              {sendingPromotion.ai_message}
+            </div>
+          )}
+          <div className="space-y-3 max-h-60 overflow-y-auto">
+            {whatsappGroups.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Nenhum grupo configurado. Acesse WhatsApp no menu para adicionar grupos.
+              </p>
+            ) : (
+              whatsappGroups.map((g) => (
+                <label key={g.id} className="flex items-center gap-3 cursor-pointer">
+                  <Checkbox
+                    checked={selectedGroups.includes(g.id)}
+                    onCheckedChange={(checked) => {
+                      setSelectedGroups((prev) =>
+                        checked ? [...prev, g.id] : prev.filter((id) => id !== g.id)
+                      );
+                    }}
+                  />
+                  <div>
+                    <p className="text-sm font-medium">{g.group_name}</p>
+                    <p className="text-xs text-muted-foreground">{g.messages_sent} enviadas</p>
+                  </div>
+                </label>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendDialogOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={sending || selectedGroups.length === 0}
+              onClick={handleSendToWhatsApp}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Enviar para {selectedGroups.length} grupo(s)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
