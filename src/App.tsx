@@ -11,6 +11,7 @@ import Sources from "@/pages/Sources";
 import Pipeline from "@/pages/Pipeline";
 import SettingsPage from "@/pages/Settings";
 import ScraperLogs from "@/pages/ScraperLogs";
+import Redirect from "@/pages/Redirect";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/scraper-logs" element={<ScraperLogs />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
+            <Route path="/r/:shortCode" element={<Redirect />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
