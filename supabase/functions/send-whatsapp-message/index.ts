@@ -97,11 +97,20 @@ Deno.serve(async (req) => {
     // === FETCH GROUPS ===
     if (action === "fetch_groups") {
       try {
-        const res = await fetch(
-          `${config.api_url}/api/${config.session_name}/groups`,
-          { headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" } }
-        );
-        const data = await res.json();
+        const url = `${config.api_url}/api/${config.session_name}/groups`;
+        console.log("Fetching groups from:", url);
+        const res = await fetch(url, {
+          headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
+        });
+        const text = await res.text();
+        console.log("Groups response status:", res.status, "body:", text.substring(0, 500));
+        if (!res.ok) {
+          return new Response(
+            JSON.stringify({ success: false, message: `WAHA retornou ${res.status}: ${text}` }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const data = text ? JSON.parse(text) : [];
         return new Response(JSON.stringify({ success: true, groups: data }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
