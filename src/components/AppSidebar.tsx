@@ -1,4 +1,4 @@
-import { LayoutDashboard, Globe, GitBranch, Settings, LogOut, Radar, ScrollText, Link2 } from "lucide-react";
+import { LayoutDashboard, Globe, GitBranch, Settings, LogOut, Radar, ScrollText, Link2, MessageCircle } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -21,6 +21,7 @@ const navItems = [
   { title: "Pipeline", url: "/pipeline", icon: GitBranch },
   { title: "Scraper Logs", url: "/scraper-logs", icon: ScrollText },
   { title: "Links Encurtados", url: "/links", icon: Link2 },
+  { title: "WhatsApp", url: "/whatsapp", icon: MessageCircle },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
