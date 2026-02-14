@@ -1,59 +1,89 @@
 
 
-# Implementar Pagina "Links Encurtados" com Melhorias na Tabela
+# Corrigir Bugs na Geracao de Mensagens do Pipeline
 
-## Contexto
-A tabela `short_links` existe mas faltam colunas importantes (`product_title`, `source`, `is_active`, `last_clicked_at`). Vamos adicionar essas colunas, atualizar a funcao de criacao de links, e criar a pagina completa de gestao.
-
----
+## Problema
+A mensagem gerada pela IA tem 3 bugs: (1) falta linha "De/Por" com precos, (2) link original usado no regenerar em vez do encurtado, (3) formato de precos inconsistente.
 
 ## Alteracoes
 
-### 1. Migracao SQL - Adicionar colunas faltantes
+### 1. Edge Function `generate-promo-message/index.ts`
 
-Adicionar as seguintes colunas a tabela `short_links`:
-- `product_title` (TEXT) - titulo do produto para exibicao direta
-- `source` (TEXT) - fonte do produto (ex: "magalu")
-- `is_active` (BOOLEAN, default TRUE) - controle de ativacao/desativacao
-- `last_clicked_at` (TIMESTAMPTZ) - data do ultimo clique
+Atualizar a construcao da mensagem (linhas 87-96) para:
+- Mostrar "De R$ X por R$ Y (X% OFF)" quando houver `old_price`
+- Formatar precos com virgula (padrao brasileiro)
+- Manter a linha "Por R$ X no Pix" com preco formatado
 
-Criar indices para `is_active` e `source`.
+**Antes:**
+```
+medal + TITULO
+produto
+Desconto de X% aplicado automaticamente
+Por 256.39 no Pix
+link
+```
 
-Atualizar a funcao/trigger de tracking de cliques para tambem atualizar `last_clicked_at` na tabela `short_links`.
+**Depois:**
+```
+medal + TITULO
+produto
+De R$ 399,90 por R$ 256,39 (36% OFF)
+Por R$ 256,39 no Pix
+link
+```
 
-Adicionar politica RLS para UPDATE na tabela `short_links` (necessaria para ativar/desativar) e DELETE (necessaria para excluir).
+### 2. Pipeline.tsx - Regenerar Mensagem (linha ~369)
 
-### 2. link-shortener.ts - Aceitar e salvar novos campos
+Atualizar o botao "Regenerar" para usar o link encurtado em vez do `product_url` original:
+- Construir a short URL a partir de `p.short_link_code` quando disponivel
+- Passar `price_type` (que nao estava sendo passado)
 
-Expandir os parametros de `shortenLink()` para aceitar `productTitle` e `source`, e passa-los no insert.
-
-### 3. Pipeline.tsx - Enviar titulo e fonte ao encurtar
-
-Atualizar a chamada a `shortenLink()` no `processPromotion` para incluir `productTitle` e `source` do scrape.
-
-### 4. ShortLinks.tsx - Criar pagina completa (novo ficheiro)
-
-Pagina com:
-- 4 cards de estatisticas: Total de Links, Total de Cliques, Media Cliques/Link, Links Ativos
-- Tabela com colunas: Produto, Link Curto (com botao copiar), Cliques, Ultimo Clique, Fonte, Status (Ativo/Inativo), Data de Criacao, Acoes
-- Acoes: Abrir original, Ativar/Desativar toggle, Excluir
-- Query direta a `short_links` sem necessidade de JOIN (pois `product_title` estara na tabela)
-
-### 5. AppSidebar.tsx - Adicionar item no menu
-
-Adicionar "Links Encurtados" com icone `Link2` entre "Scraper Logs" e "Configuracoes".
-
-### 6. App.tsx - Adicionar rota /links
-
-Registar a rota `/links` dentro do `DashboardLayout`.
+**Antes:** `original_url: p.product_url ?? ""`
+**Depois:** `original_url: p.short_link_code ? \`\${window.location.origin}/r/\${p.short_link_code}\` : p.product_url ?? ""`
 
 ---
 
 ## Detalhes Tecnicos
 
-- A migracao adiciona colunas com IF NOT EXISTS para seguranca
-- O trigger `increment_click_count` que ja pode existir na funcao `click_logs` sera substituido por uma versao que tambem atualiza `last_clicked_at`
-- Politicas RLS de UPDATE e DELETE serao restritas ao `user_id = auth.uid()`
-- A pagina ShortLinks usa query simples: `supabase.from("short_links").select("*").order("created_at", { ascending: false })`
-- Links sem `product_title` (criados antes da migracao) exibem URL truncada como fallback
+### Edge Function - Mudancas na construcao da mensagem:
+
+```typescript
+// Formatar precos no padrao brasileiro
+const formatBRL = (v: number) => v.toFixed(2).replace(".", ",");
+
+let message = `${medal} ${creativeTitle}\n`;
+message += `${product_title}\n`;
+
+if (old_price && discount > 0) {
+  const formattedOld = formatBRL(Number(old_price));
+  message += `🎟 De R$ ${formattedOld} por R$ ${formatBRL(Number(price))} (${discount}% OFF)\n`;
+}
+
+message += `Por R$ ${formattedPrice} ${priceType}\n`;
+
+if (original_url) {
+  message += original_url;
+}
+```
+
+### Pipeline.tsx - Regenerar com link curto:
+
+```typescript
+const shortUrl = p.short_link_code
+  ? `${window.location.origin}/r/${p.short_link_code}`
+  : p.product_url ?? "";
+
+const msg = await generateMessage({
+  product_title: p.product_name,
+  price: p.promo_price ?? 0,
+  old_price: p.original_price,
+  discount_percentage: ...,
+  price_type: null, // nao temos price_type na tabela promotions
+  original_url: shortUrl,
+});
+```
+
+### Ficheiros afetados:
+1. `supabase/functions/generate-promo-message/index.ts` - corrigir template da mensagem
+2. `src/pages/Pipeline.tsx` - corrigir regenerar para usar link curto
 
