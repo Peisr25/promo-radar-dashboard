@@ -195,6 +195,36 @@ export default function Pipeline() {
     toast({ title: "Copiado!" });
   };
 
+  const deleteAllScrapes = async () => {
+    if (!confirm("Tem certeza que deseja apagar TODOS os novos achados pendentes?")) return;
+    const ids = scrapes.map(s => s.id);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from("raw_scrapes").update({ status: "deleted" }).in("id", ids);
+    if (error) { toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `${ids.length} achados removidos!` });
+    fetchAll();
+  };
+
+  const deleteAllReview = async () => {
+    if (!confirm("Tem certeza que deseja apagar TODAS as promoções em revisão?")) return;
+    const ids = reviewItems.map(p => p.id);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from("promotions").delete().in("id", ids);
+    if (error) { toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `${ids.length} promoções removidas!` });
+    fetchAll();
+  };
+
+  const deleteAllQueue = async () => {
+    if (!confirm("Tem certeza que deseja apagar TODAS as promoções da fila?")) return;
+    const ids = queueItems.map(p => p.id);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from("promotions").delete().in("id", ids);
+    if (error) { toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `${ids.length} promoções removidas!` });
+    fetchAll();
+  };
+
   const formatPrice = (price: number | null) => price != null ? `R$ ${price.toFixed(2)}` : "—";
 
   const statusBadge = (status: string) => {
@@ -220,6 +250,11 @@ export default function Pipeline() {
         </TabsList>
 
         <TabsContent value="new">
+          <div className="flex justify-end mb-2">
+            <Button variant="destructive" size="sm" onClick={deleteAllScrapes} disabled={scrapes.length === 0}>
+              Apagar Todos ({scrapes.length})
+            </Button>
+          </div>
           <ScrapeFilters
             sortBy={sortBy} onSortChange={setSortBy}
             filterDiscount={filterDiscount} onFilterDiscountChange={setFilterDiscount}
@@ -280,6 +315,11 @@ export default function Pipeline() {
         </TabsContent>
 
         <TabsContent value="review">
+          <div className="flex justify-end mb-2">
+            <Button variant="destructive" size="sm" onClick={deleteAllReview} disabled={reviewItems.length === 0}>
+              Apagar Todos ({reviewItems.length})
+            </Button>
+          </div>
           {reviewItems.length === 0 ? (
             <Card><CardContent className="p-8 text-center text-muted-foreground">Nenhuma promoção em revisão.</CardContent></Card>
           ) : (
@@ -347,6 +387,11 @@ export default function Pipeline() {
         </TabsContent>
 
         <TabsContent value="queue">
+          <div className="flex justify-end mb-2">
+            <Button variant="destructive" size="sm" onClick={deleteAllQueue} disabled={queueItems.length === 0}>
+              Apagar Todos ({queueItems.length})
+            </Button>
+          </div>
           {queueItems.length === 0 ? (
             <Card><CardContent className="p-8 text-center text-muted-foreground">Fila de envio vazia.</CardContent></Card>
           ) : (
