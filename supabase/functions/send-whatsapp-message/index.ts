@@ -63,21 +63,22 @@ Deno.serve(async (req) => {
     if (action === "test") {
       try {
         const res = await fetch(
-          `${config.api_url}/api/${config.session_name}/status`,
+          `${config.api_url}/api/sessions`,
           { headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" } }
         );
         const data = await res.json();
+        const isConnected = res.ok && Array.isArray(data) && data.length > 0;
 
         await adminClient
           .from("evolution_config")
           .update({
             last_test_at: new Date().toISOString(),
-            last_test_status: res.ok ? "success" : "failed",
+            last_test_status: isConnected ? "success" : "failed",
           })
           .eq("user_id", userId);
 
         return new Response(
-          JSON.stringify({ success: res.ok, data, message: res.ok ? "Conexão OK" : "Falha na conexão" }),
+          JSON.stringify({ success: isConnected, data, message: isConnected ? "Conexão OK" : "Nenhuma sessão encontrada" }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       } catch (e) {
