@@ -11,6 +11,11 @@ interface RawScrape {
   product_title: string | null;
   original_url: string | null;
   price: number | null;
+  old_price: number | null;
+  discount_percentage: string | null;
+  rating: string | null;
+  installments: string | null;
+  price_type: string | null;
   image_url: string | null;
   source: string | null;
   status: string;
@@ -60,9 +65,14 @@ export default function ScraperLogs() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                 <TableHead>ID</TableHead>
                   <TableHead>Produto</TableHead>
                   <TableHead>Preço</TableHead>
+                  <TableHead>Preço Antigo</TableHead>
+                  <TableHead>Desconto</TableHead>
+                  <TableHead>Avaliação</TableHead>
+                  <TableHead>Parcelamento</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Fonte</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Data</TableHead>
@@ -83,6 +93,23 @@ export default function ScraperLogs() {
                     </TableCell>
                     <TableCell className="text-primary font-semibold">
                       {log.price != null ? `R$ ${log.price.toFixed(2)}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground line-through">
+                      {log.old_price != null ? `R$ ${Number(log.old_price).toFixed(2)}` : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {log.discount_percentage ? (
+                        <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">-{log.discount_percentage}%</Badge>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {log.rating ? <span className="flex items-center gap-1">⭐ {log.rating}</span> : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs max-w-[150px] truncate">{log.installments ?? "—"}</TableCell>
+                    <TableCell>
+                      {log.price_type ? (
+                        <Badge variant="outline" className="bg-secondary/20 text-secondary-foreground border-secondary/30">{log.price_type}</Badge>
+                      ) : "—"}
                     </TableCell>
                     <TableCell>{log.source ?? "—"}</TableCell>
                     <TableCell>{statusBadge(log.status)}</TableCell>

@@ -18,6 +18,11 @@ interface RawScrape {
   product_title: string | null;
   original_url: string | null;
   price: number | null;
+  old_price: number | null;
+  discount_percentage: string | null;
+  rating: string | null;
+  installments: string | null;
+  price_type: string | null;
   image_url: string | null;
   source: string | null;
   status: string;
@@ -54,6 +59,7 @@ export default function Pipeline() {
       product_name: scrape.product_title ?? "Sem título",
       product_image_url: scrape.image_url,
       promo_price: scrape.price,
+      original_price: scrape.old_price,
       product_url: scrape.original_url,
       status: "review",
     });
@@ -122,9 +128,22 @@ export default function Pipeline() {
                   )}
                   <CardContent className="p-4 space-y-2">
                     <h3 className="font-semibold line-clamp-2">{s.product_title ?? "Sem título"}</h3>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {s.old_price != null && (
+                        <span className="text-sm text-muted-foreground line-through">R$ {Number(s.old_price).toFixed(2)}</span>
+                      )}
                       <span className="text-lg font-bold text-primary">{formatPrice(s.price)}</span>
+                      {s.discount_percentage && (
+                        <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">-{s.discount_percentage}%</Badge>
+                      )}
                     </div>
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      {s.rating && <span className="flex items-center gap-1">⭐ {s.rating}</span>}
+                      {s.price_type && <Badge variant="outline" className="bg-secondary/20 text-secondary-foreground border-secondary/30">{s.price_type}</Badge>}
+                    </div>
+                    {s.installments && (
+                      <p className="text-xs text-muted-foreground">{s.installments}</p>
+                    )}
                     <Button className="w-full" onClick={() => processPromotion(s)} disabled={processing === s.id}>
                       {processing === s.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                       Processar Promoção
