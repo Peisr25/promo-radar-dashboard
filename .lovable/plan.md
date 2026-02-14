@@ -1,89 +1,135 @@
 
 
-# Corrigir Bugs na Geracao de Mensagens do Pipeline
+# Integracao com Evolution API para Envio Automatico no WhatsApp
 
-## Problema
-A mensagem gerada pela IA tem 3 bugs: (1) falta linha "De/Por" com precos, (2) link original usado no regenerar em vez do encurtado, (3) formato de precos inconsistente.
+## Resumo
+Implementar integracao completa com a Evolution API para envio automatico de mensagens promocionais para grupos do WhatsApp diretamente do Pipeline, eliminando o fluxo manual de copiar/colar.
+
+## Arquitetura
+
+As chamadas a Evolution API serao feitas via uma edge function (backend) para nao expor a API key no navegador do usuario. A configuracao (URL, API key, instancia) sera armazenada numa tabela com RLS. O frontend envia pedidos para a edge function que faz proxy para a Evolution API.
 
 ## Alteracoes
 
-### 1. Edge Function `generate-promo-message/index.ts`
+### 1. Banco de Dados - Novas Tabelas
 
-Atualizar a construcao da mensagem (linhas 87-96) para:
-- Mostrar "De R$ X por R$ Y (X% OFF)" quando houver `old_price`
-- Formatar precos com virgula (padrao brasileiro)
-- Manter a linha "Por R$ X no Pix" com preco formatado
+Criar 3 tabelas com RLS:
 
-**Antes:**
-```
-medal + TITULO
-produto
-Desconto de X% aplicado automaticamente
-Por 256.39 no Pix
-link
-```
+- **evolution_config**: armazena credenciais da Evolution API por usuario (api_url, api_key, instance_name, is_active, last_test_at, last_test_status)
+- **whatsapp_groups**: grupos de destino por usuario (group_id no formato `120363...@g.us`, group_name, is_active, messages_sent, last_message_at)
+- **whatsapp_messages_log**: historico de envios (promotion_id referenciando promotions.id como UUID, group_id, message_text, status, error_message, api_response)
 
-**Depois:**
-```
-medal + TITULO
-produto
-De R$ 399,90 por R$ 256,39 (36% OFF)
-Por R$ 256,39 no Pix
-link
-```
+Criar funcao `increment_group_messages(group_id_param)` para atualizar contadores.
 
-### 2. Pipeline.tsx - Regenerar Mensagem (linha ~369)
+Todas as tabelas terao RLS com politica `auth.uid() = user_id`.
 
-Atualizar o botao "Regenerar" para usar o link encurtado em vez do `product_url` original:
-- Construir a short URL a partir de `p.short_link_code` quando disponivel
-- Passar `price_type` (que nao estava sendo passado)
+### 2. Edge Function - `send-whatsapp-message`
 
-**Antes:** `original_url: p.product_url ?? ""`
-**Depois:** `original_url: p.short_link_code ? \`\${window.location.origin}/r/\${p.short_link_code}\` : p.product_url ?? ""`
+Nova edge function que:
+- Recebe `{ group_id, text, user_id }` no body
+- Busca a `evolution_config` do usuario via service role
+- Faz POST para `{api_url}/message/sendText/{instance_name}` com a apikey
+- Retorna sucesso/erro
+- Tambem suportara acao `test_connection` para verificar estado da instancia
+- Tambem suportara acao `fetch_groups` para listar grupos da instancia via Evolution API
 
----
+### 3. Pagina de Configuracoes WhatsApp
+
+Novo ficheiro `src/pages/WhatsAppSettings.tsx` com:
+- Formulario para URL da API, API Key e nome da instancia
+- Botao "Testar Conexao"
+- Secao para gerir grupos (adicionar/remover)
+- Botao para buscar grupos automaticamente da Evolution API
+- Tabela com estatisticas de envio por grupo
+
+### 4. Alteracoes no Pipeline
+
+No `src/pages/Pipeline.tsx`, na aba "Fila WhatsApp":
+- Adicionar botao "Enviar para WhatsApp" em cada item da fila
+- Dialog de selecao de grupos com checkboxes
+- Envio sequencial com delay entre mensagens
+- Feedback visual (loading, sucesso, erro)
+- Atualizar status para "sent" automaticamente apos envio bem-sucedido
+
+### 5. Navegacao
+
+- Adicionar item "WhatsApp" no sidebar (`src/components/AppSidebar.tsx`) com icone MessageCircle
+- Adicionar rota `/whatsapp` no `src/App.tsx`
 
 ## Detalhes Tecnicos
 
-### Edge Function - Mudancas na construcao da mensagem:
+### Tabelas SQL
 
-```typescript
-// Formatar precos no padrao brasileiro
-const formatBRL = (v: number) => v.toFixed(2).replace(".", ",");
+```text
+evolution_config:
+  id UUID PK default gen_random_uuid()
+  user_id UUID NOT NULL (unique)
+  api_url TEXT NOT NULL
+  api_key TEXT NOT NULL
+  instance_name TEXT NOT NULL
+  is_active BOOLEAN DEFAULT true
+  last_test_at TIMESTAMPTZ
+  last_test_status TEXT
+  created_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now()
 
-let message = `${medal} ${creativeTitle}\n`;
-message += `${product_title}\n`;
+whatsapp_groups:
+  id UUID PK default gen_random_uuid()
+  user_id UUID NOT NULL
+  group_id TEXT NOT NULL
+  group_name TEXT NOT NULL
+  group_description TEXT
+  is_active BOOLEAN DEFAULT true
+  messages_sent INTEGER DEFAULT 0
+  last_message_at TIMESTAMPTZ
+  created_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now()
+  UNIQUE(user_id, group_id)
 
-if (old_price && discount > 0) {
-  const formattedOld = formatBRL(Number(old_price));
-  message += `🎟 De R$ ${formattedOld} por R$ ${formatBRL(Number(price))} (${discount}% OFF)\n`;
-}
-
-message += `Por R$ ${formattedPrice} ${priceType}\n`;
-
-if (original_url) {
-  message += original_url;
-}
+whatsapp_messages_log:
+  id UUID PK default gen_random_uuid()
+  user_id UUID NOT NULL
+  promotion_id UUID REFERENCES promotions(id)
+  group_id UUID REFERENCES whatsapp_groups(id)
+  message_text TEXT NOT NULL
+  status TEXT NOT NULL DEFAULT 'pending'
+  error_message TEXT
+  api_response JSONB
+  created_at TIMESTAMPTZ DEFAULT now()
 ```
 
-### Pipeline.tsx - Regenerar com link curto:
+### Edge Function `send-whatsapp-message`
 
-```typescript
-const shortUrl = p.short_link_code
-  ? `${window.location.origin}/r/${p.short_link_code}`
-  : p.product_url ?? "";
+```text
+POST body:
+{
+  "action": "send" | "test" | "fetch_groups",
+  "group_id": "120363...@g.us",   // para action=send
+  "text": "mensagem"               // para action=send
+}
 
-const msg = await generateMessage({
-  product_title: p.product_name,
-  price: p.promo_price ?? 0,
-  old_price: p.original_price,
-  discount_percentage: ...,
-  price_type: null, // nao temos price_type na tabela promotions
-  original_url: shortUrl,
-});
+- Busca config do usuario autenticado via Authorization header
+- Usa SUPABASE_SERVICE_ROLE_KEY para ler evolution_config (contorna RLS)
+- Faz proxy da chamada para Evolution API
+- Regista log em whatsapp_messages_log
 ```
 
-### Ficheiros afetados:
-1. `supabase/functions/generate-promo-message/index.ts` - corrigir template da mensagem
-2. `src/pages/Pipeline.tsx` - corrigir regenerar para usar link curto
+### Pipeline - Botao de envio
+
+Na aba "Fila WhatsApp", cada card tera:
+- Botao verde "Enviar WhatsApp" que abre dialog
+- Dialog mostra checkboxes com grupos ativos
+- Botao "Enviar para X grupo(s)" executa envios sequenciais
+- Apos envio bem-sucedido para todos os grupos, status muda para "sent"
+
+### Ficheiros a criar/modificar
+
+1. **Criar** migration SQL para as 3 tabelas + funcao increment
+2. **Criar** `supabase/functions/send-whatsapp-message/index.ts`
+3. **Criar** `src/lib/evolution-api.ts` - cliente que chama a edge function
+4. **Criar** `src/pages/WhatsAppSettings.tsx` - pagina de configuracao
+5. **Modificar** `src/components/AppSidebar.tsx` - adicionar menu WhatsApp
+6. **Modificar** `src/App.tsx` - adicionar rota /whatsapp
+7. **Modificar** `src/pages/Pipeline.tsx` - adicionar botao envio + dialog selecao grupos
+8. **Modificar** `supabase/config.toml` - adicionar verify_jwt=false para nova function
 
