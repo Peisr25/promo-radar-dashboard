@@ -1,135 +1,78 @@
 
-
-# Integracao com Evolution API para Envio Automatico no WhatsApp
+# Migrar Integracao de Evolution API para WAHA
 
 ## Resumo
-Implementar integracao completa com a Evolution API para envio automatico de mensagens promocionais para grupos do WhatsApp diretamente do Pipeline, eliminando o fluxo manual de copiar/colar.
-
-## Arquitetura
-
-As chamadas a Evolution API serao feitas via uma edge function (backend) para nao expor a API key no navegador do usuario. A configuracao (URL, API key, instancia) sera armazenada numa tabela com RLS. O frontend envia pedidos para a edge function que faz proxy para a Evolution API.
+Adaptar toda a integracao WhatsApp do projeto para usar o WAHA (WhatsApp HTTP API) em vez da Evolution API. As mudancas afetam a edge function (proxy backend), o cliente frontend, e os textos da pagina de configuracoes. A estrutura do banco de dados sera mantida (tabela `evolution_config`) com a coluna `instance_name` renomeada para `session_name`.
 
 ## Alteracoes
 
-### 1. Banco de Dados - Novas Tabelas
+### 1. Banco de Dados
+- Renomear coluna `instance_name` para `session_name` na tabela `evolution_config`
+- Definir valor default `'default'` para `session_name`
 
-Criar 3 tabelas com RLS:
+### 2. Edge Function `send-whatsapp-message`
+Atualizar os 3 endpoints para usar formato WAHA:
 
-- **evolution_config**: armazena credenciais da Evolution API por usuario (api_url, api_key, instance_name, is_active, last_test_at, last_test_status)
-- **whatsapp_groups**: grupos de destino por usuario (group_id no formato `120363...@g.us`, group_name, is_active, messages_sent, last_message_at)
-- **whatsapp_messages_log**: historico de envios (promotion_id referenciando promotions.id como UUID, group_id, message_text, status, error_message, api_response)
+- **Header**: `apikey` passa a `X-Api-Key`
+- **Test**: `/instance/connectionState/{instance}` passa a `/api/{session}/status`
+- **Fetch groups**: `/group/fetchAllGroups/{instance}` passa a `/api/{session}/groups`, campo `subject` passa a `name`
+- **Send**: `/message/sendText/{instance}` passa a `/api/sendText`, body muda de `{ number, text }` para `{ session, chatId, text }`
+- Atualizar mensagens de erro de "Evolution API" para "WAHA"
 
-Criar funcao `increment_group_messages(group_id_param)` para atualizar contadores.
+### 3. Frontend - `src/lib/evolution-api.ts`
+- Sem mudanca estrutural (ja usa a edge function como proxy)
+- O ficheiro pode ser mantido como esta, pois so chama `supabase.functions.invoke("send-whatsapp-message")`
 
-Todas as tabelas terao RLS com politica `auth.uid() = user_id`.
+### 4. Frontend - `src/pages/WhatsAppSettings.tsx`
+- Atualizar labels: "Evolution API" para "WAHA"
+- Atualizar label "Nome da Instancia" para "Nome da Sessao"
+- Atualizar placeholder de "minha-instancia" para "default"
+- Atualizar descricao do card
+- Atualizar referencia de campo `instance_name` para `session_name` no state e nas queries
 
-### 2. Edge Function - `send-whatsapp-message`
-
-Nova edge function que:
-- Recebe `{ group_id, text, user_id }` no body
-- Busca a `evolution_config` do usuario via service role
-- Faz POST para `{api_url}/message/sendText/{instance_name}` com a apikey
-- Retorna sucesso/erro
-- Tambem suportara acao `test_connection` para verificar estado da instancia
-- Tambem suportara acao `fetch_groups` para listar grupos da instancia via Evolution API
-
-### 3. Pagina de Configuracoes WhatsApp
-
-Novo ficheiro `src/pages/WhatsAppSettings.tsx` com:
-- Formulario para URL da API, API Key e nome da instancia
-- Botao "Testar Conexao"
-- Secao para gerir grupos (adicionar/remover)
-- Botao para buscar grupos automaticamente da Evolution API
-- Tabela com estatisticas de envio por grupo
-
-### 4. Alteracoes no Pipeline
-
-No `src/pages/Pipeline.tsx`, na aba "Fila WhatsApp":
-- Adicionar botao "Enviar para WhatsApp" em cada item da fila
-- Dialog de selecao de grupos com checkboxes
-- Envio sequencial com delay entre mensagens
-- Feedback visual (loading, sucesso, erro)
-- Atualizar status para "sent" automaticamente apos envio bem-sucedido
-
-### 5. Navegacao
-
-- Adicionar item "WhatsApp" no sidebar (`src/components/AppSidebar.tsx`) com icone MessageCircle
-- Adicionar rota `/whatsapp` no `src/App.tsx`
+### 5. Nenhuma alteracao necessaria em
+- `Pipeline.tsx` - ja usa `evolution-api.ts` que chama a edge function
+- `AppSidebar.tsx` - rota `/whatsapp` ja esta correta
+- `App.tsx` - rota ja esta correta
 
 ## Detalhes Tecnicos
 
-### Tabelas SQL
-
+### Migracao SQL
 ```text
-evolution_config:
-  id UUID PK default gen_random_uuid()
-  user_id UUID NOT NULL (unique)
-  api_url TEXT NOT NULL
-  api_key TEXT NOT NULL
-  instance_name TEXT NOT NULL
-  is_active BOOLEAN DEFAULT true
-  last_test_at TIMESTAMPTZ
-  last_test_status TEXT
-  created_at TIMESTAMPTZ DEFAULT now()
-  updated_at TIMESTAMPTZ DEFAULT now()
-
-whatsapp_groups:
-  id UUID PK default gen_random_uuid()
-  user_id UUID NOT NULL
-  group_id TEXT NOT NULL
-  group_name TEXT NOT NULL
-  group_description TEXT
-  is_active BOOLEAN DEFAULT true
-  messages_sent INTEGER DEFAULT 0
-  last_message_at TIMESTAMPTZ
-  created_at TIMESTAMPTZ DEFAULT now()
-  updated_at TIMESTAMPTZ DEFAULT now()
-  UNIQUE(user_id, group_id)
-
-whatsapp_messages_log:
-  id UUID PK default gen_random_uuid()
-  user_id UUID NOT NULL
-  promotion_id UUID REFERENCES promotions(id)
-  group_id UUID REFERENCES whatsapp_groups(id)
-  message_text TEXT NOT NULL
-  status TEXT NOT NULL DEFAULT 'pending'
-  error_message TEXT
-  api_response JSONB
-  created_at TIMESTAMPTZ DEFAULT now()
+ALTER TABLE evolution_config RENAME COLUMN instance_name TO session_name;
+ALTER TABLE evolution_config ALTER COLUMN session_name SET DEFAULT 'default';
 ```
 
-### Edge Function `send-whatsapp-message`
+### Edge Function - Mudancas de Endpoints
 
+Teste de conexao:
 ```text
-POST body:
-{
-  "action": "send" | "test" | "fetch_groups",
-  "group_id": "120363...@g.us",   // para action=send
-  "text": "mensagem"               // para action=send
-}
-
-- Busca config do usuario autenticado via Authorization header
-- Usa SUPABASE_SERVICE_ROLE_KEY para ler evolution_config (contorna RLS)
-- Faz proxy da chamada para Evolution API
-- Regista log em whatsapp_messages_log
+Antes: GET {api_url}/instance/connectionState/{instance_name}
+        Header: apikey
+Depois: GET {api_url}/api/{session_name}/status
+        Header: X-Api-Key
 ```
 
-### Pipeline - Botao de envio
+Buscar grupos:
+```text
+Antes: GET {api_url}/group/fetchAllGroups/{instance_name}?getParticipants=false
+        Header: apikey
+Depois: GET {api_url}/api/{session_name}/groups
+        Header: X-Api-Key
+        Resposta: group.name (antes era group.subject)
+```
 
-Na aba "Fila WhatsApp", cada card tera:
-- Botao verde "Enviar WhatsApp" que abre dialog
-- Dialog mostra checkboxes com grupos ativos
-- Botao "Enviar para X grupo(s)" executa envios sequenciais
-- Apos envio bem-sucedido para todos os grupos, status muda para "sent"
+Enviar mensagem:
+```text
+Antes: POST {api_url}/message/sendText/{instance_name}
+        Header: apikey
+        Body: { number: group_id, text }
+Depois: POST {api_url}/api/sendText
+        Header: X-Api-Key
+        Body: { session: session_name, chatId: group_id, text }
+```
 
-### Ficheiros a criar/modificar
-
-1. **Criar** migration SQL para as 3 tabelas + funcao increment
-2. **Criar** `supabase/functions/send-whatsapp-message/index.ts`
-3. **Criar** `src/lib/evolution-api.ts` - cliente que chama a edge function
-4. **Criar** `src/pages/WhatsAppSettings.tsx` - pagina de configuracao
-5. **Modificar** `src/components/AppSidebar.tsx` - adicionar menu WhatsApp
-6. **Modificar** `src/App.tsx` - adicionar rota /whatsapp
-7. **Modificar** `src/pages/Pipeline.tsx` - adicionar botao envio + dialog selecao grupos
-8. **Modificar** `supabase/config.toml` - adicionar verify_jwt=false para nova function
-
+### Ficheiros a modificar
+1. Migracao SQL (renomear coluna)
+2. `supabase/functions/send-whatsapp-message/index.ts` (endpoints + headers + body)
+3. `src/pages/WhatsAppSettings.tsx` (labels + campo session_name)
