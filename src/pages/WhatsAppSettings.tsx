@@ -36,7 +36,7 @@ export default function WhatsAppSettings() {
       .from("evolution_config")
       .select("*")
       .eq("user_id", user!.id)
-      .single();
+      .maybeSingle();
     if (data) setConfig({ api_url: data.api_url, api_key: data.api_key, session_name: data.session_name });
   };
 
