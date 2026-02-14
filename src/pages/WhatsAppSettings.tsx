@@ -23,7 +23,7 @@ export default function WhatsAppSettings() {
   const [testing, setTesting] = useState(false);
   const [fetchingGroups, setFetchingGroups] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [config, setConfig] = useState({ api_url: "", api_key: "", instance_name: "" });
+  const [config, setConfig] = useState({ api_url: "", api_key: "", session_name: "" });
   const [groups, setGroups] = useState<any[]>([]);
   const [newGroup, setNewGroup] = useState({ group_id: "", group_name: "", group_description: "" });
 
@@ -37,7 +37,7 @@ export default function WhatsAppSettings() {
       .select("*")
       .eq("user_id", user!.id)
       .single();
-    if (data) setConfig({ api_url: data.api_url, api_key: data.api_key, instance_name: data.instance_name });
+    if (data) setConfig({ api_url: data.api_url, api_key: data.api_key, session_name: data.session_name });
   };
 
   const loadGroups = async () => {
@@ -126,8 +126,8 @@ export default function WhatsAppSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Conexão com Evolution API</CardTitle>
-          <CardDescription>Configure sua instância para envio automático de mensagens</CardDescription>
+          <CardTitle>Conexão com WAHA</CardTitle>
+          <CardDescription>Configure sua sessão WAHA para envio automático de mensagens</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -141,9 +141,9 @@ export default function WhatsAppSettings() {
               onChange={(e) => setConfig({ ...config, api_key: e.target.value })} />
           </div>
           <div className="space-y-2">
-            <Label>Nome da Instância</Label>
-            <Input placeholder="minha-instancia" value={config.instance_name}
-              onChange={(e) => setConfig({ ...config, instance_name: e.target.value })} />
+            <Label>Nome da Sessão</Label>
+            <Input placeholder="default" value={config.session_name}
+              onChange={(e) => setConfig({ ...config, session_name: e.target.value })} />
           </div>
           <div className="flex gap-2">
             <Button onClick={saveConfig} disabled={saving}>

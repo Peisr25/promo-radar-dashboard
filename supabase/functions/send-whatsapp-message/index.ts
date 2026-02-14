@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     // Service role client to bypass RLS for reading config
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Get user's Evolution config
+    // Get user's WAHA config
     const { data: config, error: configError } = await adminClient
       .from("evolution_config")
       .select("*")
@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
 
     if (configError || !config) {
       return new Response(
-        JSON.stringify({ error: "Evolution API não configurada. Acesse WhatsApp > Configurações." }),
+        JSON.stringify({ error: "WAHA não configurado. Acesse WhatsApp > Configurações." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -63,8 +63,8 @@ Deno.serve(async (req) => {
     if (action === "test") {
       try {
         const res = await fetch(
-          `${config.api_url}/instance/connectionState/${config.instance_name}`,
-          { headers: { apikey: config.api_key, "Content-Type": "application/json" } }
+          `${config.api_url}/api/${config.session_name}/status`,
+          { headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" } }
         );
         const data = await res.json();
 
@@ -97,8 +97,8 @@ Deno.serve(async (req) => {
     if (action === "fetch_groups") {
       try {
         const res = await fetch(
-          `${config.api_url}/group/fetchAllGroups/${config.instance_name}?getParticipants=false`,
-          { headers: { apikey: config.api_key, "Content-Type": "application/json" } }
+          `${config.api_url}/api/${config.session_name}/groups`,
+          { headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" } }
         );
         const data = await res.json();
         return new Response(JSON.stringify({ success: true, groups: data }),
@@ -123,11 +123,11 @@ Deno.serve(async (req) => {
 
       try {
         const res = await fetch(
-          `${config.api_url}/message/sendText/${config.instance_name}`,
+          `${config.api_url}/api/sendText`,
           {
             method: "POST",
-            headers: { apikey: config.api_key, "Content-Type": "application/json" },
-            body: JSON.stringify({ number: group_id, text }),
+            headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
+            body: JSON.stringify({ session: config.session_name, chatId: group_id, text }),
           }
         );
         const responseData = await res.json();
