@@ -55,10 +55,10 @@ export type Database = {
           api_url: string
           created_at: string
           id: string
-          instance_name: string
           is_active: boolean | null
           last_test_at: string | null
           last_test_status: string | null
+          session_name: string
           updated_at: string
           user_id: string
         }
@@ -67,10 +67,10 @@ export type Database = {
           api_url: string
           created_at?: string
           id?: string
-          instance_name: string
           is_active?: boolean | null
           last_test_at?: string | null
           last_test_status?: string | null
+          session_name?: string
           updated_at?: string
           user_id: string
         }
@@ -79,10 +79,10 @@ export type Database = {
           api_url?: string
           created_at?: string
           id?: string
-          instance_name?: string
           is_active?: boolean | null
           last_test_at?: string | null
           last_test_status?: string | null
+          session_name?: string
           updated_at?: string
           user_id?: string
         }
