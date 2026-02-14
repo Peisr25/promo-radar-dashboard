@@ -90,7 +90,7 @@ ESTRATÉGIAS DE HUMOR:
     let message = `${medal} ${creativeTitle}\n`;
     message += `${product_title}\n`;
     if (old_price && discount > 0) {
-      message += `🎟 ~R$ ${formatBRL(Number(old_price))}~ por R$ ${formatBRL(Number(price))} (${discount}% OFF)${priceType ? ` ${priceType}` : ''}\n`;
+      message += `🎟 ~R$ ${formatBRL(Number(old_price))}~ por R$ ${formatBRL(Number(price))} (*${discount}% OFF*)${priceType ? ` ${priceType}` : ''}\n`;
     } else {
       message += `💰 R$ ${formattedPrice} ${priceType}\n`;
     }
