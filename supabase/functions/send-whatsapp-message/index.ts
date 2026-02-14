@@ -96,29 +96,58 @@ Deno.serve(async (req) => {
 
     // === FETCH GROUPS ===
     if (action === "fetch_groups") {
-      try {
-        const url = `${config.api_url}/api/${config.session_name}/groups`;
-        console.log("Fetching groups from:", url);
-        const res = await fetch(url, {
-          headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
-        });
-        const text = await res.text();
-        console.log("Groups response status:", res.status, "body:", text.substring(0, 500));
-        if (!res.ok) {
+      const maxRetries = 2;
+      const timeoutMs = 60000;
+      const retryDelayMs = 2000;
+      const url = `${config.api_url}/api/${config.session_name}/groups?limit=50&offset=0`;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Fetching groups (attempt ${attempt}/${maxRetries}) from: ${url}`);
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+          const res = await fetch(url, {
+            headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+
+          const text = await res.text();
+          console.log("Groups response status:", res.status, "body:", text.substring(0, 500));
+
+          if (!res.ok) {
+            const msg = `WAHA retornou ${res.status}: ${text.substring(0, 200)}`;
+            if (attempt < maxRetries) {
+              console.log(`Retrying in ${retryDelayMs}ms...`);
+              await new Promise((r) => setTimeout(r, retryDelayMs));
+              continue;
+            }
+            return new Response(
+              JSON.stringify({ success: false, message: msg }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          const data = text ? JSON.parse(text) : [];
+          return new Response(JSON.stringify({ success: true, groups: data }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } catch (e) {
+          const isTimeout = e.name === "AbortError";
+          const msg = isTimeout
+            ? "Timeout ao listar grupos. Tente reiniciar a sessão no WAHA."
+            : e.message;
+          console.log(`Fetch groups error (attempt ${attempt}): ${msg}`);
+          if (attempt < maxRetries) {
+            await new Promise((r) => setTimeout(r, retryDelayMs));
+            continue;
+          }
           return new Response(
-            JSON.stringify({ success: false, message: `WAHA retornou ${res.status}: ${text}` }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({ success: false, message: msg }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        const data = text ? JSON.parse(text) : [];
-        return new Response(JSON.stringify({ success: true, groups: data }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } catch (e) {
-        return new Response(
-          JSON.stringify({ success: false, message: e.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
       }
     }
 
