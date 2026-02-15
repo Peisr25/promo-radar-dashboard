@@ -65,7 +65,9 @@ Deno.serve(async (req) => {
           `${config.api_url}/api/sessions`,
           { headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" } }
         );
-        const data = await res.json();
+        const resText = await res.text();
+        let data;
+        try { data = resText ? JSON.parse(resText) : null; } catch { data = null; }
         const isConnected = res.ok && Array.isArray(data) && data.length > 0;
 
         await adminClient
@@ -128,7 +130,8 @@ Deno.serve(async (req) => {
             );
           }
 
-          const data = text ? JSON.parse(text) : [];
+          let data;
+          try { data = (text && text.trim()) ? JSON.parse(text) : []; } catch { data = []; }
           return new Response(JSON.stringify({ success: true, groups: data }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
@@ -168,7 +171,9 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ session: config.session_name, chatId: group_id, text }),
           }
         );
-        const responseData = await res.json();
+        const resText = await res.text();
+        let responseData;
+        try { responseData = resText ? JSON.parse(resText) : {}; } catch { responseData = { raw: resText }; }
 
         return new Response(
           JSON.stringify({ success: res.ok, data: responseData, message: res.ok ? "Enviado" : "Falha" }),
