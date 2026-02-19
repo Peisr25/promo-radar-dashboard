@@ -46,26 +46,30 @@ ESTRATÉGIAS DE HUMOR:
 4. Exagero cômico: "TÃO BARATO QUE DÁ MEDO"
 5. Memes: "STONKS 📈", "É HOJE QUE O PATRÃO CHORA"`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: system_prompt || defaultPrompt },
-          {
-            role: "user",
-            content: `Produto: ${product_title}\nDesconto: ${discount}%\nPreço: R$ ${formattedPrice}\nAvaliação: ${rating ?? "N/A"}\n\nCrie UM título criativo em CAPS LOCK (máximo 8 palavras):`,
-          },
-        ],
-        temperature: 0.9,
-      }),
-    });
+    // Retry up to 2 times on 5xx errors
+    let response: Response | null = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: system_prompt || defaultPrompt },
+            {
+              role: "user",
+              content: `Produto: ${product_title}\nDesconto: ${discount}%\nPreço: R$ ${formattedPrice}\nAvaliação: ${rating ?? "N/A"}\n\nCrie UM título criativo em CAPS LOCK (máximo 8 palavras):`,
+            },
+          ],
+          temperature: 0.9,
+        }),
+      });
 
-    if (!response.ok) {
+      if (response.ok) break;
+
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Tente novamente em alguns segundos." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -76,9 +80,30 @@ ESTRATÉGIAS DE HUMOR:
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
       const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      throw new Error("AI gateway error");
+      console.error(`AI gateway error (attempt ${attempt}):`, response.status, t);
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    }
+
+    if (!response || !response.ok) {
+      // Fallback: use a generic creative title instead of failing
+      console.warn("AI gateway unavailable, using fallback title");
+      const fallbackTitle = "PROMOÇÃO IMPERDÍVEL";
+      const formatBRL = (v: number) => v.toFixed(2).replace(".", ",");
+      let message = `${medal} ${fallbackTitle}\n`;
+      message += `${product_title}\n`;
+      if (old_price && discount > 0) {
+        message += `🎟 ~R$ ${formatBRL(Number(old_price))}~ por R$ ${formatBRL(Number(price))} (*${discount}% OFF*)${priceType ? ` ${priceType}` : ''}\n`;
+      } else {
+        message += `💰 R$ ${formattedPrice} ${priceType}\n`;
+      }
+      if (original_url) message += original_url;
+      return new Response(JSON.stringify({ message }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const data = await response.json();
