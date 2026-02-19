@@ -56,19 +56,25 @@ Deno.serve(async (req) => {
       );
     }
 
+    const baseUrl = config.api_url.replace(/\/+$/, '');
     const { action, group_id, text } = await req.json();
 
     // === TEST CONNECTION ===
     if (action === "test") {
       try {
+        const url = `${baseUrl}/api/sessions`;
+        console.log("Test URL:", url);
         const res = await fetch(
-          `${config.api_url}/api/sessions`,
+          url,
           { headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" } }
         );
         const resText = await res.text();
+        console.log("Test response status:", res.status);
+        console.log("Test response body:", resText.substring(0, 500));
         let data;
         try { data = resText ? JSON.parse(resText) : null; } catch { data = null; }
-        const isConnected = res.ok && Array.isArray(data) && data.length > 0;
+        const isConnected = res.ok && data != null &&
+          (Array.isArray(data) ? data.length > 0 : typeof data === 'object');
 
         await adminClient
           .from("evolution_config")
@@ -100,7 +106,7 @@ Deno.serve(async (req) => {
       const maxRetries = 2;
       const timeoutMs = 60000;
       const retryDelayMs = 2000;
-      const url = `${config.api_url}/api/${config.session_name}/groups?limit=50&offset=0`;
+      const url = `${baseUrl}/api/${config.session_name}/groups?limit=50&offset=0`;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -164,7 +170,7 @@ Deno.serve(async (req) => {
 
       try {
         const res = await fetch(
-          `${config.api_url}/api/sendText`,
+          `${baseUrl}/api/sendText`,
           {
             method: "POST",
             headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
