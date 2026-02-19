@@ -103,10 +103,15 @@ Deno.serve(async (req) => {
 
     // === FETCH GROUPS ===
     if (action === "fetch_groups") {
+      const { limit = 50 } = await req.clone().then(r => r.json()).catch(() => ({}));
       const maxRetries = 2;
       const timeoutMs = 60000;
       const retryDelayMs = 2000;
-      const url = `${baseUrl}/api/${config.session_name}/groups?limit=50&offset=0`;
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", "0");
+      params.append("exclude", "participants");
+      const url = `${baseUrl}/api/${config.session_name}/groups?${params.toString()}`;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -138,7 +143,14 @@ Deno.serve(async (req) => {
 
           let data;
           try { data = (text && text.trim()) ? JSON.parse(text) : []; } catch { data = []; }
-          return new Response(JSON.stringify({ success: true, groups: data }),
+
+          // WAHA returns an object keyed by group ID, convert to array
+          let groups = data;
+          if (data && !Array.isArray(data) && typeof data === 'object') {
+            groups = Object.values(data);
+          }
+
+          return new Response(JSON.stringify({ success: true, groups }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } catch (e) {
