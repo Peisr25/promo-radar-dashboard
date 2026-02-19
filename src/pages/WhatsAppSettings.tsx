@@ -25,6 +25,7 @@ export default function WhatsAppSettings() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [config, setConfig] = useState({ api_url: "", api_key: "", session_name: "" });
   const [groups, setGroups] = useState<any[]>([]);
+  const [groupLimit, setGroupLimit] = useState(50);
   const [newGroup, setNewGroup] = useState({ group_id: "", group_name: "", group_description: "" });
 
   useEffect(() => {
@@ -76,14 +77,16 @@ export default function WhatsAppSettings() {
   const handleFetchGroups = async () => {
     if (!user) return;
     setFetchingGroups(true);
-    const result = await fetchEvolutionGroups();
+    const result = await fetchEvolutionGroups({ limit: groupLimit });
     setFetchingGroups(false);
     if (!result.success || !result.groups) {
       toast({ title: "Erro ao buscar grupos", description: result.message, variant: "destructive" });
       return;
     }
+    // Safety: convert object to array if needed
+    const groupsArr = Array.isArray(result.groups) ? result.groups : Object.values(result.groups);
     let added = 0;
-    for (const g of result.groups) {
+    for (const g of groupsArr) {
       const gid = g.id || g.jid;
       const gname = g.subject || g.name || gid;
       if (!gid) continue;
@@ -95,7 +98,7 @@ export default function WhatsAppSettings() {
       }, { onConflict: "user_id,group_id" });
       if (!error) added++;
     }
-    toast({ title: `${added} grupo(s) importados!` });
+    toast({ title: `${added} de ${groupsArr.length} grupo(s) importados!` });
     loadGroups();
   };
 
@@ -164,10 +167,18 @@ export default function WhatsAppSettings() {
               <CardDescription>Gerencie os grupos de destino das promoções</CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleFetchGroups} disabled={fetchingGroups}>
-                {fetchingGroups ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                Buscar da API
-              </Button>
+              <div className="flex items-end gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Limite</Label>
+                  <Input type="number" min={1} max={500} value={groupLimit}
+                    onChange={(e) => setGroupLimit(Number(e.target.value) || 50)}
+                    className="w-20 h-9" />
+                </div>
+                <Button variant="outline" size="sm" onClick={handleFetchGroups} disabled={fetchingGroups}>
+                  {fetchingGroups ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                  Buscar da API
+                </Button>
+              </div>
               <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm"><Plus className="mr-2 h-4 w-4" /> Adicionar</Button>

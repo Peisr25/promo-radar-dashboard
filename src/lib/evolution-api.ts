@@ -8,9 +8,9 @@ export async function testEvolutionConnection(): Promise<{ success: boolean; mes
   return { success: data?.success ?? false, message: data?.message ?? "Erro desconhecido" };
 }
 
-export async function fetchEvolutionGroups(): Promise<{ success: boolean; groups?: any[]; message?: string }> {
+export async function fetchEvolutionGroups(filters?: { limit?: number }): Promise<{ success: boolean; groups?: any[]; message?: string }> {
   const { data, error } = await supabase.functions.invoke("send-whatsapp-message", {
-    body: { action: "fetch_groups" },
+    body: { action: "fetch_groups", ...filters },
   });
   if (error) return { success: false, message: error.message };
   return { success: data?.success ?? false, groups: data?.groups, message: data?.message };
