@@ -182,14 +182,25 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const res = await fetch(
-          `${baseUrl}/api/sendText`,
-          {
+        const { image_url } = body;
+        let endpoint: string;
+        let payload: Record<string, unknown>;
+
+        if (image_url) {
+          // Resize image URL (e.g. 280x210 -> 800x800)
+          const hiResUrl = image_url.replace(/\/\d+x\d+\//, '/800x800/');
+          endpoint = `${baseUrl}/api/sendImage`;
+          payload = { session: config.session_name, chatId: group_id, caption: text, file: { url: hiResUrl } };
+        } else {
+          endpoint = `${baseUrl}/api/sendText`;
+          payload = { session: config.session_name, chatId: group_id, text };
+        }
+
+        const res = await fetch(endpoint, {
             method: "POST",
             headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
-            body: JSON.stringify({ session: config.session_name, chatId: group_id, text }),
-          }
-        );
+            body: JSON.stringify(payload),
+          });
         const resText = await res.text();
         let responseData;
         try { responseData = resText ? JSON.parse(resText) : {}; } catch { responseData = { raw: resText }; }

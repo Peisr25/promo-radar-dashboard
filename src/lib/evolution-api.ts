@@ -16,9 +16,9 @@ export async function fetchEvolutionGroups(filters?: { limit?: number }): Promis
   return { success: data?.success ?? false, groups: data?.groups, message: data?.message };
 }
 
-export async function sendWhatsAppMessage(groupId: string, text: string): Promise<{ success: boolean; message: string; data?: any }> {
+export async function sendWhatsAppMessage(groupId: string, text: string, imageUrl?: string | null): Promise<{ success: boolean; message: string; data?: any }> {
   const { data, error } = await supabase.functions.invoke("send-whatsapp-message", {
-    body: { action: "send", group_id: groupId, text },
+    body: { action: "send", group_id: groupId, text, image_url: imageUrl ?? undefined },
   });
   if (error) return { success: false, message: error.message };
   return { success: data?.success ?? false, message: data?.message ?? "Erro", data: data?.data };

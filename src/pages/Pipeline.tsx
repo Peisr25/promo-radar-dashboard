@@ -94,7 +94,7 @@ export default function Pipeline() {
     for (const gId of selectedGroups) {
       const group = whatsappGroups.find((g) => g.id === gId);
       if (!group) continue;
-      const result = await sendWhatsAppMessage(group.group_id, sendingPromotion.ai_message ?? "");
+      const result = await sendWhatsAppMessage(group.group_id, sendingPromotion.ai_message ?? "", sendingPromotion.product_image_url);
       // Log
       await supabase.from("whatsapp_messages_log").insert({
         user_id: user.id,
