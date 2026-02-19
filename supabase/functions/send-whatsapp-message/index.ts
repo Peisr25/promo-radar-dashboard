@@ -183,24 +183,36 @@ Deno.serve(async (req) => {
 
       try {
         const { image_url } = body;
-        let endpoint: string;
-        let payload: Record<string, unknown>;
 
-        if (image_url) {
-          // Resize image URL (e.g. 280x210 -> 800x800)
-          const hiResUrl = image_url.replace(/\/\d+x\d+\//, '/800x800/');
-          endpoint = `${baseUrl}/api/sendImage`;
-          payload = { session: config.session_name, chatId: group_id, caption: text, file: { url: hiResUrl } };
-        } else {
-          endpoint = `${baseUrl}/api/sendText`;
-          payload = { session: config.session_name, chatId: group_id, text };
-        }
-
-        const res = await fetch(endpoint, {
+        // Helper to send text-only
+        const sendText = async () => {
+          return await fetch(`${baseUrl}/api/sendText`, {
             method: "POST",
             headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ session: config.session_name, chatId: group_id, text }),
           });
+        };
+
+        let res: Response;
+
+        if (image_url) {
+          // Try sending image with caption
+          const hiResUrl = image_url.replace(/\/\d+x\d+\//, '/800x800/');
+          res = await fetch(`${baseUrl}/api/sendImage`, {
+            method: "POST",
+            headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
+            body: JSON.stringify({ session: config.session_name, chatId: group_id, caption: text, file: { url: hiResUrl } }),
+          });
+
+          // If sendImage not supported (422), fallback to text
+          if (!res.ok && res.status === 422) {
+            console.log("sendImage not supported (422), falling back to sendText");
+            res = await sendText();
+          }
+        } else {
+          res = await sendText();
+        }
+
         const resText = await res.text();
         let responseData;
         try { responseData = resText ? JSON.parse(resText) : {}; } catch { responseData = { raw: resText }; }
