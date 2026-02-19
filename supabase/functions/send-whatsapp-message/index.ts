@@ -57,7 +57,8 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl = config.api_url.replace(/\/+$/, '');
-    const { action, group_id, text } = await req.json();
+    const body = await req.json();
+    const { action, group_id, text } = body;
 
     // === TEST CONNECTION ===
     if (action === "test") {
@@ -103,7 +104,7 @@ Deno.serve(async (req) => {
 
     // === FETCH GROUPS ===
     if (action === "fetch_groups") {
-      const { limit = 50 } = await req.clone().then(r => r.json()).catch(() => ({}));
+      const { limit = 50 } = body;
       const maxRetries = 2;
       const timeoutMs = 60000;
       const retryDelayMs = 2000;
