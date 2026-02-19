@@ -1,45 +1,51 @@
 
-
-# Fix WAHA Connection Test
+# Fix "Buscar da API" and Add Filters
 
 ## Problem
-The "Testar Conexao" always returns "Nenhuma sessao encontrada" even though a WAHA session is active. Two likely causes:
-
-1. **Double slash in URL**: The stored `api_url` ends with `/`, and the code appends `/api/sessions`, resulting in `//api/sessions`
-2. **Response format mismatch**: The code expects `Array.isArray(data) && data.length > 0`, but WAHA might return the data in a different structure
+The WAHA API returns groups as an **object** (keyed by group ID), not an array. The current code does `for (const g of result.groups)` which silently fails on objects since objects are not iterable with `for...of`. Additionally, no filters (limit, search) are passed to the WAHA API.
 
 ## Changes
 
-### 1. Edge Function `supabase/functions/send-whatsapp-message/index.ts`
+### 1. Edge Function (`supabase/functions/send-whatsapp-message/index.ts`)
 
-**Fix URL construction** - Strip trailing slashes from `api_url` before building endpoints:
-```text
-const baseUrl = config.api_url.replace(/\/+$/, '');
-```
-Apply this to all three actions (test, fetch_groups, send).
+- **Convert object response to array**: After parsing the WAHA response, detect if it's an object (not array) and convert using `Object.values(data)`.
+- **Pass filters to WAHA**: Accept `limit` and `exclude` parameters from the frontend and forward them as query params to the WAHA API endpoint (`GET /api/{session}/groups?limit=X&exclude=participants`).
+- **Exclude participants by default** to reduce response size (not needed for group listing).
 
-**Add debug logging** to the test action so we can see the actual WAHA response:
-```text
-console.log("Test URL:", url);
-console.log("Test response status:", res.status);
-console.log("Test response body:", resText.substring(0, 500));
-```
+### 2. Frontend (`src/lib/evolution-api.ts`)
 
-**Broaden session detection** - Accept both array and object responses:
-```text
-const isConnected = res.ok && data != null &&
-  (Array.isArray(data) ? data.length > 0 : typeof data === 'object');
-```
+- Update `fetchEvolutionGroups()` to accept optional filter parameters: `limit`.
+- Pass these filters in the request body to the edge function.
 
-### 2. No database or frontend changes needed
+### 3. Frontend (`src/pages/WhatsAppSettings.tsx`)
 
-The frontend and database are working correctly. Only the edge function proxy logic needs adjustment.
+- **Add filter UI** above the "Buscar da API" button:
+  - **Limite de grupos**: number input (default 50) controlling max groups returned from WAHA.
+- **Fix group iteration**: Add a safety check — if `result.groups` is an object, convert to array with `Object.values()` before iterating.
+- After fetching, show a toast with how many groups were found vs. imported.
 
 ## Technical Details
 
+### WAHA Response Format (object, not array)
+```text
+{
+  "120363420014791829@g.us": { "id": "...", "subject": "OPORTUNIDADE..." },
+  "120363291010318513@g.us": { "id": "...", "subject": "MEDEIROS VAPE" }
+}
+```
+
+### Conversion logic (edge function)
+```text
+let groups = data;
+if (data && !Array.isArray(data) && typeof data === 'object') {
+  groups = Object.values(data);
+}
+return { success: true, groups };
+```
+
 ### Files to modify
-- `supabase/functions/send-whatsapp-message/index.ts`
+- `supabase/functions/send-whatsapp-message/index.ts` — convert object to array, pass filters
+- `src/lib/evolution-api.ts` — accept and pass filter params
+- `src/pages/WhatsAppSettings.tsx` — add limit input, safety conversion
 
-### Verification
-After deploying, clicking "Testar Conexao" should show "Conexao OK" if the WAHA session is active. The edge function logs will also show the raw WAHA response for further debugging if needed.
-
+### No database changes needed
