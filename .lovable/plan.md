@@ -1,51 +1,26 @@
 
-# Fix "Buscar da API" and Add Filters
+
+# Fix "Body is unusable" Error on Buscar da API
 
 ## Problem
-The WAHA API returns groups as an **object** (keyed by group ID), not an array. The current code does `for (const g of result.groups)` which silently fails on objects since objects are not iterable with `for...of`. Additionally, no filters (limit, search) are passed to the WAHA API.
+The edge function reads `req.json()` on line 60 to extract `action`, which **consumes** the request body. Then inside the `fetch_groups` block (line 106), it tries `req.clone().then(r => r.json())` to read `limit` -- but the body is already consumed, so Deno throws `"Body is unusable"`.
+
+## Solution
+Parse the body **once** into a variable and reuse it. No need to call `req.json()` a second time.
 
 ## Changes
 
-### 1. Edge Function (`supabase/functions/send-whatsapp-message/index.ts`)
+### File: `supabase/functions/send-whatsapp-message/index.ts`
 
-- **Convert object response to array**: After parsing the WAHA response, detect if it's an object (not array) and convert using `Object.values(data)`.
-- **Pass filters to WAHA**: Accept `limit` and `exclude` parameters from the frontend and forward them as query params to the WAHA API endpoint (`GET /api/{session}/groups?limit=X&exclude=participants`).
-- **Exclude participants by default** to reduce response size (not needed for group listing).
+- **Line 60**: Change destructuring to capture the full parsed body:
+  ```
+  const body = await req.json();
+  const { action, group_id, text } = body;
+  ```
 
-### 2. Frontend (`src/lib/evolution-api.ts`)
+- **Line 106**: Replace `await req.clone().then(r => r.json()).catch(() => ({}))` with simply reading from the already-parsed `body`:
+  ```
+  const { limit = 50 } = body;
+  ```
 
-- Update `fetchEvolutionGroups()` to accept optional filter parameters: `limit`.
-- Pass these filters in the request body to the edge function.
-
-### 3. Frontend (`src/pages/WhatsAppSettings.tsx`)
-
-- **Add filter UI** above the "Buscar da API" button:
-  - **Limite de grupos**: number input (default 50) controlling max groups returned from WAHA.
-- **Fix group iteration**: Add a safety check — if `result.groups` is an object, convert to array with `Object.values()` before iterating.
-- After fetching, show a toast with how many groups were found vs. imported.
-
-## Technical Details
-
-### WAHA Response Format (object, not array)
-```text
-{
-  "120363420014791829@g.us": { "id": "...", "subject": "OPORTUNIDADE..." },
-  "120363291010318513@g.us": { "id": "...", "subject": "MEDEIROS VAPE" }
-}
-```
-
-### Conversion logic (edge function)
-```text
-let groups = data;
-if (data && !Array.isArray(data) && typeof data === 'object') {
-  groups = Object.values(data);
-}
-return { success: true, groups };
-```
-
-### Files to modify
-- `supabase/functions/send-whatsapp-message/index.ts` — convert object to array, pass filters
-- `src/lib/evolution-api.ts` — accept and pass filter params
-- `src/pages/WhatsAppSettings.tsx` — add limit input, safety conversion
-
-### No database changes needed
+That is the only change needed -- two lines modified in the edge function. No frontend changes required.
