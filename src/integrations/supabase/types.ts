@@ -201,6 +201,7 @@ export type Database = {
           last_run_at: string | null
           name: string
           scrape_interval_minutes: number
+          site_name: string | null
           status: string
           updated_at: string
           url: string
@@ -213,6 +214,7 @@ export type Database = {
           last_run_at?: string | null
           name: string
           scrape_interval_minutes?: number
+          site_name?: string | null
           status?: string
           updated_at?: string
           url: string
@@ -225,6 +227,7 @@ export type Database = {
           last_run_at?: string | null
           name?: string
           scrape_interval_minutes?: number
+          site_name?: string | null
           status?: string
           updated_at?: string
           url?: string

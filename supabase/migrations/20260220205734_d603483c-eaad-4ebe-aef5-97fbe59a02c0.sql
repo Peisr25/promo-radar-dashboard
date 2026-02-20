@@ -1,0 +1,1 @@
+ALTER TABLE public.scraper_sources ADD COLUMN site_name text DEFAULT NULL;
