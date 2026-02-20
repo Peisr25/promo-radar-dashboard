@@ -129,8 +129,8 @@ export default function WhatsAppSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Conexão com WAHA</CardTitle>
-          <CardDescription>Configure sua sessão WAHA para envio automático de mensagens</CardDescription>
+          <CardTitle>Conexão com Evolution API</CardTitle>
+          <CardDescription>Configure sua instância Evolution API para envio automático de mensagens</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -144,7 +144,7 @@ export default function WhatsAppSettings() {
               onChange={(e) => setConfig({ ...config, api_key: e.target.value })} />
           </div>
           <div className="space-y-2">
-            <Label>Nome da Sessão</Label>
+            <Label>Nome da Instância</Label>
             <Input placeholder="default" value={config.session_name}
               onChange={(e) => setConfig({ ...config, session_name: e.target.value })} />
           </div>
