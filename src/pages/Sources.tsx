@@ -47,9 +47,13 @@ export default function Sources() {
   const handleSync = async (source: Source) => {
     setSyncingId(source.id);
     try {
-      const res = await fetch("https://fast-api-scrapers-radar-production.up.railway.app/api/start-scrape", {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/start-scrape`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
         body: JSON.stringify({ source_id: source.id, site_name: (source as any).site_name }),
       });
       if (res.ok) {
