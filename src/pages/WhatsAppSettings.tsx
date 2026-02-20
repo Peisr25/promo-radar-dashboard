@@ -123,6 +123,13 @@ export default function WhatsAppSettings() {
     loadGroups();
   };
 
+  const deleteAllGroups = async () => {
+    if (!user) return;
+    const { error } = await supabase.from("whatsapp_groups").delete().eq("user_id", user.id);
+    if (error) toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+    else { toast({ title: "Todos os grupos removidos!" }); setGroups([]); }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Configurações WhatsApp</h1>
@@ -179,6 +186,11 @@ export default function WhatsAppSettings() {
                   Buscar da API
                 </Button>
               </div>
+              {groups.length > 0 && (
+                <Button variant="destructive" size="sm" onClick={deleteAllGroups}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Excluir Todos
+                </Button>
+              )}
               <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm"><Plus className="mr-2 h-4 w-4" /> Adicionar</Button>

@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
       const maxRetries = 2;
       const timeoutMs = 60000;
       const retryDelayMs = 2000;
+      const limit = body.limit ? Number(body.limit) : 0;
       const url = `${baseUrl}/group/fetchAllGroups/${config.session_name}?getParticipants=false`;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -144,6 +145,11 @@ Deno.serve(async (req) => {
           let groups = data;
           if (data && !Array.isArray(data) && typeof data === 'object') {
             groups = Object.values(data);
+          }
+
+          // Apply limit
+          if (limit > 0 && Array.isArray(groups)) {
+            groups = groups.slice(0, limit);
           }
 
           return new Response(JSON.stringify({ success: true, groups }),
