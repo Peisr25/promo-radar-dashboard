@@ -178,6 +178,9 @@ export default function Pipeline() {
       console.error("AI generation error:", error);
       return null;
     }
+    if (data?.fallback) {
+      toast({ title: "⚠️ Aviso", description: "A IA não conseguiu gerar um título criativo. Foi usado o título padrão. Você pode editar na aba Revisão.", variant: "destructive" });
+    }
     return data?.message as string | null;
   };
 
