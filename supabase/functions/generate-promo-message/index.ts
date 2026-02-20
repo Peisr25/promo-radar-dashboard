@@ -92,12 +92,12 @@ ESTRATÉGIAS DE HUMOR:
       console.warn("AI gateway unavailable, using fallback title");
       const fallbackTitle = "PROMOÇÃO IMPERDÍVEL";
       const formatBRL = (v: number) => v.toFixed(2).replace(".", ",");
-      let message = `${medal} ${fallbackTitle}\n`;
-      message += `${product_title}\n`;
+      let message = `${medal} ${fallbackTitle}\n\n`;
+      message += `${product_title}\n\n`;
       if (old_price && discount > 0) {
-        message += `🎟 ~R$ ${formatBRL(Number(old_price))}~ por R$ ${formatBRL(Number(price))} (*${discount}% OFF*)${priceType ? ` ${priceType}` : ''}\n`;
+        message += `🎟 ~R$ ${formatBRL(Number(old_price))}~ por R$ ${formatBRL(Number(price))} (*${discount}% OFF*)${priceType ? ` ${priceType}` : ''}\n\n`;
       } else {
-        message += `💰 R$ ${formattedPrice} ${priceType}\n`;
+        message += `💰 R$ ${formattedPrice} ${priceType}\n\n`;
       }
       if (original_url) message += original_url;
       return new Response(JSON.stringify({ message, fallback: true }), {
@@ -111,12 +111,12 @@ ESTRATÉGIAS DE HUMOR:
     // Build the full message
     const formatBRL = (v: number) => v.toFixed(2).replace(".", ",");
 
-    let message = `${medal} ${creativeTitle}\n`;
-    message += `${product_title}\n`;
+    let message = `${medal} ${creativeTitle}\n\n`;
+    message += `${product_title}\n\n`;
     if (old_price && discount > 0) {
-      message += `🎟 ~R$ ${formatBRL(Number(old_price))}~ por R$ ${formatBRL(Number(price))} (*${discount}% OFF*)${priceType ? ` ${priceType}` : ''}\n`;
+      message += `🎟 ~R$ ${formatBRL(Number(old_price))}~ por R$ ${formatBRL(Number(price))} (*${discount}% OFF*)${priceType ? ` ${priceType}` : ''}\n\n`;
     } else {
-      message += `💰 R$ ${formattedPrice} ${priceType}\n`;
+      message += `💰 R$ ${formattedPrice} ${priceType}\n\n`;
     }
     if (original_url) {
       message += original_url;
