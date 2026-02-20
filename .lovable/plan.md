@@ -1,78 +1,50 @@
 
 
-# Migrar de WAHA para Evolution API
+# Corrigir Geracao de Mensagens com IA
 
-## Resumo
-Alterar o provedor de disparo do WhatsApp de WAHA para Evolution API, atualizando endpoints, headers, payloads e textos da interface.
+## Problema Identificado
+
+A funcao `generate-promo-message` esta falhando silenciosamente porque o modelo `openai/gpt-5-nano` nao suporta o parametro `temperature: 0.9` (apenas o valor padrao 1 e aceite). A API retorna erro 400 em ambas as tentativas, e o sistema cai no fallback com a frase generica "PROMOCAO IMPERDIVEL" sem avisar o usuario.
+
+Erro nos logs:
+```text
+"Unsupported value: 'temperature' does not support 0.9 with this model.
+ Only the default (1) value is supported."
+```
 
 ## Alteracoes
 
-### 1. Interface - `src/pages/WhatsAppSettings.tsx`
-- Linha 132: "Conexao com WAHA" -> "Conexao com Evolution API"
-- Linha 133: "Configure sua sessao WAHA..." -> "Configure sua instancia Evolution API..."
-- Linha 147: Label "Nome da Sessao" -> "Nome da Instancia"
-- Nenhuma variavel de codigo muda, apenas textos visiveis ao usuario.
+### 1. Edge Function `supabase/functions/generate-promo-message/index.ts`
 
-### 2. Edge Function - `supabase/functions/send-whatsapp-message/index.ts`
+- Remover o parametro `temperature: 0.9` do body da requisicao (o modelo usara o valor padrao 1, que ja e suficiente para criatividade).
+- Trocar o modelo de `openai/gpt-5-nano` para `google/gemini-3-flash-preview` (modelo recomendado, mais capaz e sem restricoes de temperatura).
 
-**Header de autenticacao (todas as requisicoes):**
-- Trocar `"X-Api-Key": config.api_key` por `"apikey": config.api_key`
+### 2. Frontend `src/pages/Pipeline.tsx`
 
-**Bloco `test` (linhas 64-102):**
-- URL: `${baseUrl}/api/sessions` -> `${baseUrl}/instance/connectionState/${config.session_name}`
-- Logica de sucesso: verificar se `res.ok` e se o objeto retornado indica conexao ativa (ex: `data?.instance?.state === "open"` ou simplesmente `res.ok && data != null`)
-- Mensagem de erro: trocar "WAHA" por "Evolution API"
-
-**Bloco `fetch_groups` (linhas 106-172):**
-- URL: `${baseUrl}/api/${config.session_name}/groups?...` -> `${baseUrl}/group/fetchAllGroups/${config.session_name}?getParticipants=false`
-- Remover query params de limit/offset/exclude (Evolution API nao usa esses params neste endpoint)
-- Manter conversao object-to-array como seguranca, mas Evolution API retorna array direto
-- Trocar mensagens de erro de "WAHA" para "Evolution API"
-
-**Bloco `send` (linhas 176-230):**
-- **Sem imagem:**
-  - Endpoint: `${baseUrl}/api/sendText` -> `${baseUrl}/message/sendText/${config.session_name}`
-  - Payload: `{ session, chatId, text }` -> `{ number: group_id, text }`
-- **Com imagem:**
-  - Endpoint: `${baseUrl}/api/sendImage` -> `${baseUrl}/message/sendMedia/${config.session_name}`
-  - Payload: `{ session, chatId, caption, file: { url } }` -> `{ number: group_id, mediatype: "image", mimetype: "image/jpeg", media: hiResUrl, caption: text }`
-  - Remover fallback 422 (Evolution API suporta sendMedia nativamente)
-- Manter redimensionamento de imagem (`replace(/\/\d+x\d+\//, '/800x800/')`)
-
-**Mensagem de config ausente (linha 54):**
-- "WAHA nao configurado..." -> "Evolution API nao configurada..."
-
-### 3. Nenhuma alteracao necessaria
-- `src/lib/evolution-api.ts` - ja esta correto, nao precisa mudar
-- Banco de dados - sem alteracoes
-- Tabela `evolution_config` - mesma estrutura (api_url, api_key, session_name)
+- Na funcao `generateMessage` (linha 169-182), verificar se a resposta da edge function contem um indicador de fallback e exibir um toast de aviso ao usuario quando a IA falhar e o titulo padrao for usado.
 
 ## Detalhes Tecnicos
 
-### Mapeamento de Endpoints
+### Edge Function - Corpo da requisicao corrigido
 
+Antes:
 ```text
-WAHA                                    -> Evolution API
-------------------------------------------------------
-GET  /api/sessions                      -> GET  /instance/connectionState/{instance}
-GET  /api/{session}/groups?...          -> GET  /group/fetchAllGroups/{instance}?getParticipants=false
-POST /api/sendText                      -> POST /message/sendText/{instance}
-POST /api/sendImage                     -> POST /message/sendMedia/{instance}
+model: "openai/gpt-5-nano"
+temperature: 0.9
 ```
 
-### Header de Autenticacao
+Depois:
 ```text
-WAHA:       "X-Api-Key": apiKey
-Evolution:  "apikey": apiKey
+model: "google/gemini-3-flash-preview"
+(sem parametro temperature)
 ```
 
-### Payloads de Envio
-```text
--- Texto (Evolution API) --
-POST /message/sendText/{instance}
-{ "number": "120363...@g.us", "text": "mensagem" }
+### Edge Function - Sinalizar fallback ao frontend
 
--- Midia (Evolution API) --
-POST /message/sendMedia/{instance}
-{ "number": "120363...@g.us", "mediatype": "image", "mimetype": "image/jpeg", "media": "https://...", "caption": "mensagem" }
-```
+Adicionar um campo `fallback: true` na resposta JSON quando o titulo generico for usado, para que o frontend possa avisar o usuario.
+
+### Frontend - Aviso ao usuario
+
+Na funcao `generateMessage`, apos receber a resposta, verificar `data?.fallback === true` e exibir um toast de aviso:
+"A IA nao conseguiu gerar um titulo criativo. Foi usado o titulo padrao. Voce pode editar na aba Revisao."
+
