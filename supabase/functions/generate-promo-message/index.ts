@@ -56,7 +56,7 @@ ESTRATÉGIAS DE HUMOR:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "openai/gpt-5-nano",
+          model: "google/gemini-3-flash-preview",
           messages: [
             { role: "system", content: system_prompt || defaultPrompt },
             {
@@ -64,7 +64,6 @@ ESTRATÉGIAS DE HUMOR:
               content: `Produto: ${product_title}\nDesconto: ${discount}%\nPreço: R$ ${formattedPrice}\nAvaliação: ${rating ?? "N/A"}\n\nCrie UM título criativo em CAPS LOCK (máximo 8 palavras):`,
             },
           ],
-          temperature: 0.9,
         }),
       });
 
@@ -101,7 +100,7 @@ ESTRATÉGIAS DE HUMOR:
         message += `💰 R$ ${formattedPrice} ${priceType}\n`;
       }
       if (original_url) message += original_url;
-      return new Response(JSON.stringify({ message }), {
+      return new Response(JSON.stringify({ message, fallback: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
