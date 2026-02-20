@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
     if (configError || !config) {
       return new Response(
-        JSON.stringify({ error: "WAHA não configurado. Acesse WhatsApp > Configurações." }),
+        JSON.stringify({ error: "Evolution API não configurada. Acesse WhatsApp > Configurações." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -63,11 +63,11 @@ Deno.serve(async (req) => {
     // === TEST CONNECTION ===
     if (action === "test") {
       try {
-        const url = `${baseUrl}/api/sessions`;
+        const url = `${baseUrl}/instance/connectionState/${config.session_name}`;
         console.log("Test URL:", url);
         const res = await fetch(
           url,
-          { headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" } }
+          { headers: { "apikey": config.api_key, "Content-Type": "application/json" } }
         );
         const resText = await res.text();
         console.log("Test response status:", res.status);
@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
         let data;
         try { data = resText ? JSON.parse(resText) : null; } catch { data = null; }
         const isConnected = res.ok && data != null &&
-          (Array.isArray(data) ? data.length > 0 : typeof data === 'object');
+          (data?.instance?.state === "open" || typeof data === 'object');
 
         await adminClient
           .from("evolution_config")
@@ -104,15 +104,10 @@ Deno.serve(async (req) => {
 
     // === FETCH GROUPS ===
     if (action === "fetch_groups") {
-      const { limit = 50 } = body;
       const maxRetries = 2;
       const timeoutMs = 60000;
       const retryDelayMs = 2000;
-      const params = new URLSearchParams();
-      params.set("limit", String(limit));
-      params.set("offset", "0");
-      params.append("exclude", "participants");
-      const url = `${baseUrl}/api/${config.session_name}/groups?${params.toString()}`;
+      const url = `${baseUrl}/group/fetchAllGroups/${config.session_name}?getParticipants=false`;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -121,7 +116,7 @@ Deno.serve(async (req) => {
           const timer = setTimeout(() => controller.abort(), timeoutMs);
 
           const res = await fetch(url, {
-            headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
+            headers: { "apikey": config.api_key, "Content-Type": "application/json" },
             signal: controller.signal,
           });
           clearTimeout(timer);
@@ -130,7 +125,7 @@ Deno.serve(async (req) => {
           console.log("Groups response status:", res.status, "body:", text.substring(0, 500));
 
           if (!res.ok) {
-            const msg = `WAHA retornou ${res.status}: ${text.substring(0, 200)}`;
+            const msg = `Evolution API retornou ${res.status}: ${text.substring(0, 200)}`;
             if (attempt < maxRetries) {
               console.log(`Retrying in ${retryDelayMs}ms...`);
               await new Promise((r) => setTimeout(r, retryDelayMs));
@@ -145,7 +140,7 @@ Deno.serve(async (req) => {
           let data;
           try { data = (text && text.trim()) ? JSON.parse(text) : []; } catch { data = []; }
 
-          // WAHA returns an object keyed by group ID, convert to array
+          // Convert to array if needed (safety check)
           let groups = data;
           if (data && !Array.isArray(data) && typeof data === 'object') {
             groups = Object.values(data);
@@ -157,7 +152,7 @@ Deno.serve(async (req) => {
         } catch (e) {
           const isTimeout = e.name === "AbortError";
           const msg = isTimeout
-            ? "Timeout ao listar grupos. Tente reiniciar a sessão no WAHA."
+            ? "Timeout ao listar grupos. Tente reiniciar a instância na Evolution API."
             : e.message;
           console.log(`Fetch groups error (attempt ${attempt}): ${msg}`);
           if (attempt < maxRetries) {
@@ -184,33 +179,21 @@ Deno.serve(async (req) => {
       try {
         const { image_url } = body;
 
-        // Helper to send text-only
-        const sendText = async () => {
-          return await fetch(`${baseUrl}/api/sendText`, {
-            method: "POST",
-            headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
-            body: JSON.stringify({ session: config.session_name, chatId: group_id, text }),
-          });
-        };
-
         let res: Response;
 
         if (image_url) {
-          // Try sending image with caption
           const hiResUrl = image_url.replace(/\/\d+x\d+\//, '/800x800/');
-          res = await fetch(`${baseUrl}/api/sendImage`, {
+          res = await fetch(`${baseUrl}/message/sendMedia/${config.session_name}`, {
             method: "POST",
-            headers: { "X-Api-Key": config.api_key, "Content-Type": "application/json" },
-            body: JSON.stringify({ session: config.session_name, chatId: group_id, caption: text, file: { url: hiResUrl } }),
+            headers: { "apikey": config.api_key, "Content-Type": "application/json" },
+            body: JSON.stringify({ number: group_id, mediatype: "image", mimetype: "image/jpeg", media: hiResUrl, caption: text }),
           });
-
-          // If sendImage not supported (422), fallback to text
-          if (!res.ok && res.status === 422) {
-            console.log("sendImage not supported (422), falling back to sendText");
-            res = await sendText();
-          }
         } else {
-          res = await sendText();
+          res = await fetch(`${baseUrl}/message/sendText/${config.session_name}`, {
+            method: "POST",
+            headers: { "apikey": config.api_key, "Content-Type": "application/json" },
+            body: JSON.stringify({ number: group_id, text }),
+          });
         }
 
         const resText = await res.text();
