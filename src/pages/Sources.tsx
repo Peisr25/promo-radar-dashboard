@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, RefreshCw } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Source = Tables<"scraper_sources">;
@@ -21,7 +21,8 @@ export default function Sources() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Source | null>(null);
-  const [form, setForm] = useState({ name: "", url: "", scrape_interval_minutes: 60 });
+  const [form, setForm] = useState({ name: "", url: "", site_name: "", scrape_interval_minutes: 60 });
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   const fetchSources = async () => {
     const { data } = await supabase.from("scraper_sources").select("*").order("created_at", { ascending: false });
@@ -33,14 +34,35 @@ export default function Sources() {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ name: "", url: "", scrape_interval_minutes: 60 });
+    setForm({ name: "", url: "", site_name: "", scrape_interval_minutes: 60 });
     setDialogOpen(true);
   };
 
   const openEdit = (s: Source) => {
     setEditing(s);
-    setForm({ name: s.name, url: s.url, scrape_interval_minutes: s.scrape_interval_minutes });
+    setForm({ name: s.name, url: s.url, site_name: (s as any).site_name || "", scrape_interval_minutes: s.scrape_interval_minutes });
     setDialogOpen(true);
+  };
+
+  const handleSync = async (source: Source) => {
+    setSyncingId(source.id);
+    try {
+      const res = await fetch("https://fast-api-scrapers-radar-production.up.railway.app/api/start-scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_id: source.id, site_name: (source as any).site_name }),
+      });
+      if (res.ok) {
+        toast({ title: "Sincronização iniciada", description: "Os produtos aparecerão em breve." });
+      } else {
+        const err = await res.text();
+        toast({ title: "Erro ao sincronizar", description: err, variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: "Erro ao sincronizar", description: e.message, variant: "destructive" });
+    } finally {
+      setSyncingId(null);
+    }
   };
 
   const handleSave = async () => {
@@ -110,6 +132,9 @@ export default function Sources() {
                       <Switch checked={s.is_active} onCheckedChange={() => toggleActive(s)} />
                     </TableCell>
                     <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => handleSync(s)} disabled={syncingId === s.id}>
+                        {syncingId === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </TableCell>
@@ -129,6 +154,7 @@ export default function Sources() {
           </DialogHeader>
           <div className="space-y-4">
             <Input placeholder="Nome (ex: Ofertas Magalu)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input placeholder="Identificador do site (ex: magalu)" value={form.site_name} onChange={(e) => setForm({ ...form, site_name: e.target.value })} />
             <Input placeholder="URL alvo" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
             <Input type="number" placeholder="Intervalo (minutos)" value={form.scrape_interval_minutes} onChange={(e) => setForm({ ...form, scrape_interval_minutes: Number(e.target.value) })} />
           </div>
