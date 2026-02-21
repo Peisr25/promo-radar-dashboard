@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Loader2, RefreshCw } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { pt } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Source = Tables<"scraper_sources">;
@@ -31,6 +33,14 @@ export default function Sources() {
   };
 
   useEffect(() => { fetchSources(); }, [user]);
+
+  // Polling: refresh every 30s while any source is "running"
+  useEffect(() => {
+    const hasRunning = sources.some((s) => s.status === "running");
+    if (!hasRunning) return;
+    const interval = setInterval(fetchSources, 30000);
+    return () => clearInterval(interval);
+  }, [sources]);
 
   const openNew = () => {
     setEditing(null);
@@ -57,6 +67,11 @@ export default function Sources() {
         body: JSON.stringify({ source_id: source.id, site_name: (source as any).site_name }),
       });
       if (res.ok) {
+        await supabase
+          .from("scraper_sources")
+          .update({ status: "running", last_run_at: new Date().toISOString() })
+          .eq("id", source.id);
+        await fetchSources();
         toast({ title: "Sincronização iniciada", description: "Os produtos aparecerão em breve." });
       } else {
         const err = await res.text();
@@ -118,13 +133,14 @@ export default function Sources() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead className="hidden md:table-cell">URL</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Ativo</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
+                 <TableRow>
+                   <TableHead>Nome</TableHead>
+                   <TableHead className="hidden md:table-cell">URL</TableHead>
+                   <TableHead>Status</TableHead>
+                   <TableHead className="hidden sm:table-cell">Última Execução</TableHead>
+                   <TableHead>Ativo</TableHead>
+                   <TableHead className="text-right">Ações</TableHead>
+                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sources.map((s) => (
@@ -132,8 +148,12 @@ export default function Sources() {
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell className="hidden max-w-[200px] truncate md:table-cell">{s.url}</TableCell>
                     <TableCell>{statusBadge(s.status)}</TableCell>
+                    <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">
+                      {s.last_run_at
+                        ? formatDistanceToNow(new Date(s.last_run_at), { addSuffix: true, locale: pt })
+                        : "Nunca"}
+                    </TableCell>
                     <TableCell>
-                      <Switch checked={s.is_active} onCheckedChange={() => toggleActive(s)} />
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" onClick={() => handleSync(s)} disabled={syncingId === s.id}>
