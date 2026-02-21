@@ -1,49 +1,54 @@
 
-# Integrar Motor de Web Scraping Externo na Pagina de Fontes
 
-## Resumo
+# Melhorar Feedback Visual apos Sincronizacao
 
-Adicionar o campo `site_name` (identificador do site, ex: "magalu") a cada fonte e um botao de sincronizacao que dispara o scraper externo via API.
+## Diagnostico
 
-## Alteracoes
+A sincronizacao **esta a funcionar corretamente**. O pedido ao servidor externo retornou sucesso (`200 OK`), e o toast de confirmacao apareceu. O problema e que nao existe feedback visual adicional no dashboard -- o status da fonte continua "Pendente" e nao ha atualizacao automatica dos dados.
 
-### 1. Migracao de Base de Dados
+## Causa Raiz
 
-Adicionar a coluna `site_name` (text, nullable, default null) a tabela `scraper_sources`:
+1. O scraper externo processa os dados em background, mas **nao atualiza o `status` nem o `last_run_at`** da fonte na base de dados apos concluir.
+2. A pagina nao faz polling nem usa realtime para detetar quando novos produtos chegam.
+
+## Alteracoes Propostas
+
+### 1. Atualizar status e last_run_at localmente apos sync
+
+Quando o sync retorna sucesso, atualizar imediatamente a fonte na base de dados para dar feedback visual:
+
+- Mudar o `status` para `"running"` e `last_run_at` para `now()` na tabela `scraper_sources` logo apos a resposta de sucesso da API.
+- Re-buscar a lista de fontes (`fetchSources()`) para atualizar a tabela.
+
+### 2. Adicionar coluna "Ultima Execucao" na tabela
+
+Mostrar a data/hora formatada de `last_run_at` para o utilizador saber quando foi a ultima sincronizacao.
+
+### 3. (Opcional) Polling automatico
+
+Adicionar um `setInterval` que re-busca as fontes a cada 30 segundos enquanto houver alguma fonte com status `"running"`, para detetar quando o scraper externo termina e muda o status.
+
+## Detalhes Tecnicos
+
+### Ficheiro: `src/pages/Sources.tsx`
+
+**Na funcao `handleSync`, apos `res.ok`:**
 
 ```text
-ALTER TABLE public.scraper_sources ADD COLUMN site_name text DEFAULT NULL;
+await supabase
+  .from("scraper_sources")
+  .update({ status: "running", last_run_at: new Date().toISOString() })
+  .eq("id", source.id);
+fetchSources();
 ```
 
-Isto e necessario porque a coluna nao existe atualmente. Ao ser nullable com default null, nao quebra registos existentes.
+**Na tabela, adicionar coluna "Ultima Execucao":**
 
-### 2. Atualizar `src/pages/Sources.tsx`
+- Novo `<TableHead>` com texto "Ultima Execucao".
+- Novo `<TableCell>` que formata `s.last_run_at` usando `date-fns` (ex: `formatDistanceToNow`), ou mostra "Nunca" se for null.
 
-**Estado e formulario:**
-- Adicionar `site_name: ""` ao estado inicial do `form`.
-- Na funcao `openNew`, inicializar `site_name: ""`.
-- Na funcao `openEdit`, preencher `site_name: s.site_name || ""`.
+**Polling (opcional):**
 
-**Novo estado `syncingId`:**
-- Criar `const [syncingId, setSyncingId] = useState<string | null>(null)` para controlar o loading do botao de sync.
+- Usar `useEffect` com `setInterval` de 30s que chama `fetchSources()` se alguma fonte tiver status `"running"`.
+- Limpar o intervalo no cleanup do effect.
 
-**Nova funcao `handleSync(source: Source)`:**
-- Define `syncingId` com o id da fonte.
-- Faz `fetch("https://fast-api-scrapers-radar-production.up.railway.app/api/start-scrape", { method: "POST", headers, body: { source_id, site_name } })`.
-- Se `res.ok`, mostra toast de sucesso: "Sincronizacao iniciada em background! Os produtos aparecerao em breve."
-- Se falhar, mostra toast de erro.
-- No final, limpa `syncingId` para null.
-
-**Formulario (Dialog):**
-- Adicionar um novo `<Input>` com placeholder "Identificador do site (ex: magalu)" entre o campo Nome e o campo URL.
-
-**Tabela (coluna Acoes):**
-- Adicionar um botao antes do botao Editar com icone `RefreshCw` (ou `Loader2` com `animate-spin` quando `syncingId === s.id`).
-- Importar `RefreshCw` de `lucide-react`.
-
-**Importacoes:**
-- Adicionar `RefreshCw` a importacao de `lucide-react`.
-
-### 3. Tipos TypeScript
-
-O ficheiro `src/integrations/supabase/types.ts` sera atualizado automaticamente apos a migracao, adicionando `site_name` ao tipo `scraper_sources`. Ate la, o acesso via `s.site_name` pode precisar de um cast ou do operador optional chaining, que ja esta coberto com `s.site_name || ""`.
