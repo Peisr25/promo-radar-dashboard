@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Copy, Check, Send, RefreshCw, Link, MessageCircle } from "lucide-react";
+import { Loader2, Sparkles, Copy, Check, Send, RefreshCw, Link, MessageCircle, Clock } from "lucide-react";
+import { format } from "date-fns";
 import { shortenLink } from "@/lib/link-shortener";
 import { sendWhatsAppMessage } from "@/lib/evolution-api";
 import type { Tables } from "@/integrations/supabase/types";
@@ -39,6 +40,13 @@ interface RawScrape {
   image_url: string | null;
   source: string | null;
   status: string;
+  metadata: {
+    categoria?: string;
+    is_buy_box?: boolean;
+    validade_fim?: string;
+    source_id?: string;
+    [key: string]: unknown;
+  } | null;
 }
 
 export default function Pipeline() {
@@ -60,6 +68,8 @@ export default function Pipeline() {
   const [filterDiscount, setFilterDiscount] = useState<DiscountFilter>("all");
   const [filterPriceType, setFilterPriceType] = useState<PriceTypeFilter>("all");
   const [filterPriceRange, setFilterPriceRange] = useState<PriceRangeFilter>("all");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [hideOpenBox, setHideOpenBox] = useState(false);
 
   const fetchAll = async () => {
     const [s, r, q] = await Promise.all([
@@ -123,6 +133,13 @@ export default function Pipeline() {
     fetchAll();
   };
 
+  const uniqueCategories = useMemo(() => {
+    const cats = scrapes
+      .map(s => (s.metadata as any)?.categoria)
+      .filter((c): c is string => !!c);
+    return [...new Set(cats)].sort();
+  }, [scrapes]);
+
   const filteredScrapes = useMemo(() => {
     let filtered = [...scrapes];
 
@@ -145,6 +162,12 @@ export default function Pipeline() {
         }
       });
     }
+    if (filterCategory !== "all") {
+      filtered = filtered.filter(s => (s.metadata as any)?.categoria === filterCategory);
+    }
+    if (hideOpenBox) {
+      filtered = filtered.filter(s => (s.metadata as any)?.is_buy_box !== true);
+    }
 
     filtered.sort((a, b) => {
       switch (sortBy) {
@@ -164,7 +187,7 @@ export default function Pipeline() {
     });
 
     return filtered;
-  }, [scrapes, sortBy, filterDiscount, filterPriceType, filterPriceRange]);
+  }, [scrapes, sortBy, filterDiscount, filterPriceType, filterPriceRange, filterCategory, hideOpenBox]);
 
   const generateMessage = async (productData: {
     product_title: string; price: number; old_price?: number | null;
@@ -321,6 +344,9 @@ export default function Pipeline() {
             filterDiscount={filterDiscount} onFilterDiscountChange={setFilterDiscount}
             filterPriceType={filterPriceType} onFilterPriceTypeChange={setFilterPriceType}
             filterPriceRange={filterPriceRange} onFilterPriceRangeChange={setFilterPriceRange}
+            filterCategory={filterCategory} onFilterCategoryChange={setFilterCategory}
+            categories={uniqueCategories}
+            hideOpenBox={hideOpenBox} onHideOpenBoxChange={setHideOpenBox}
             filteredCount={filteredScrapes.length} totalCount={scrapes.length}
           />
 
@@ -347,6 +373,14 @@ export default function Pipeline() {
                     </div>
                   )}
                   <CardContent className="p-4 space-y-2">
+                    <div className="flex flex-wrap gap-1.5 mb-1">
+                      {(s.metadata as any)?.categoria && (
+                        <Badge variant="secondary" className="text-xs">{(s.metadata as any).categoria}</Badge>
+                      )}
+                      {(s.metadata as any)?.is_buy_box === true && (
+                        <Badge variant="destructive" className="text-xs">📦 Open Box / Reembalado</Badge>
+                      )}
+                    </div>
                     <h3 className="font-semibold line-clamp-2">{s.product_title ?? "Sem título"}</h3>
                     <div className="flex items-center gap-2 flex-wrap">
                       {s.old_price != null && (
@@ -357,12 +391,18 @@ export default function Pipeline() {
                         <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">-{s.discount_percentage}%</Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
                       {s.rating && <span className="flex items-center gap-1">⭐ {s.rating}</span>}
                       {s.price_type && <Badge variant="outline" className="bg-secondary/20 text-secondary-foreground border-secondary/30">{s.price_type}</Badge>}
                     </div>
                     {s.installments && (
-                      <p className="text-xs text-muted-foreground">{s.installments}</p>
+                      <p className="text-xs text-muted-foreground break-words">{s.installments}</p>
+                    )}
+                    {(s.metadata as any)?.validade_fim && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Válido até: {format(new Date((s.metadata as any).validade_fim), "dd/MM/yyyy HH:mm")}
+                      </p>
                     )}
                     <Button className="w-full" onClick={() => processPromotion(s)} disabled={processing === s.id}>
                       {processing === s.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
