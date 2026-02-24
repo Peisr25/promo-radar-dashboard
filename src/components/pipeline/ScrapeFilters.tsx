@@ -1,5 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowUpDown, X } from "lucide-react";
 
 export type SortOption = "discount" | "price" | "rating" | "recent" | "savings";
@@ -16,6 +17,11 @@ interface ScrapeFiltersProps {
   onFilterPriceTypeChange: (v: PriceTypeFilter) => void;
   filterPriceRange: PriceRangeFilter;
   onFilterPriceRangeChange: (v: PriceRangeFilter) => void;
+  filterCategory: string;
+  onFilterCategoryChange: (v: string) => void;
+  categories: string[];
+  hideOpenBox: boolean;
+  onHideOpenBoxChange: (v: boolean) => void;
   filteredCount: number;
   totalCount: number;
 }
@@ -25,14 +31,19 @@ export function ScrapeFilters({
   filterDiscount, onFilterDiscountChange,
   filterPriceType, onFilterPriceTypeChange,
   filterPriceRange, onFilterPriceRangeChange,
+  filterCategory, onFilterCategoryChange,
+  categories,
+  hideOpenBox, onHideOpenBoxChange,
   filteredCount, totalCount,
 }: ScrapeFiltersProps) {
-  const hasFilters = filterDiscount !== "all" || filterPriceType !== "all" || filterPriceRange !== "all";
+  const hasFilters = filterDiscount !== "all" || filterPriceType !== "all" || filterPriceRange !== "all" || filterCategory !== "all" || hideOpenBox;
 
   const clearFilters = () => {
     onFilterDiscountChange("all");
     onFilterPriceTypeChange("all");
     onFilterPriceRangeChange("all");
+    onFilterCategoryChange("all");
+    onHideOpenBoxChange(false);
   };
 
   return (
@@ -94,6 +105,31 @@ export function ScrapeFilters({
             <SelectItem value="500+">Acima de R$ 500</SelectItem>
           </SelectContent>
         </Select>
+
+        {categories.length > 0 && (
+          <Select value={filterCategory} onValueChange={onFilterCategoryChange}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="Categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas Categorias</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="hide-open-box"
+            checked={hideOpenBox}
+            onCheckedChange={(checked) => onHideOpenBoxChange(checked === true)}
+          />
+          <label htmlFor="hide-open-box" className="text-sm cursor-pointer select-none">
+            Ocultar Open Box
+          </label>
+        </div>
 
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
