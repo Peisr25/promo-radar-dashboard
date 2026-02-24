@@ -1,54 +1,70 @@
 
 
-# Melhorar Feedback Visual apos Sincronizacao
+# Atualizar Pipeline de Promocoes com Dados Enriquecidos do Metadata
 
-## Diagnostico
+## Contexto
 
-A sincronizacao **esta a funcionar corretamente**. O pedido ao servidor externo retornou sucesso (`200 OK`), e o toast de confirmacao apareceu. O problema e que nao existe feedback visual adicional no dashboard -- o status da fonte continua "Pendente" e nao ha atualizacao automatica dos dados.
+O backend de scraping foi atualizado e agora envia dados adicionais na coluna `metadata` (JSONB) da tabela `raw_scrapes`, incluindo `categoria`, `is_buy_box` e `validade_fim`. Atualmente o metadata so contem `source_id`. As alteracoes abaixo preparam a interface para os novos campos.
 
-## Causa Raiz
+## Alteracoes
 
-1. O scraper externo processa os dados em background, mas **nao atualiza o `status` nem o `last_run_at`** da fonte na base de dados apos concluir.
-2. A pagina nao faz polling nem usa realtime para detetar quando novos produtos chegam.
+### 1. Atualizar a interface RawScrape (Pipeline.tsx)
 
-## Alteracoes Propostas
+Adicionar o campo `metadata` ao tipo `RawScrape`:
 
-### 1. Atualizar status e last_run_at localmente apos sync
+```text
+metadata: {
+  categoria?: string;
+  is_buy_box?: boolean;
+  validade_fim?: string;
+  source_id?: string;
+  [key: string]: unknown;
+} | null;
+```
 
-Quando o sync retorna sucesso, atualizar imediatamente a fonte na base de dados para dar feedback visual:
+### 2. Atualizar os Cartoes de Produto (aba "Novos Achados")
 
-- Mudar o `status` para `"running"` e `last_run_at` para `now()` na tabela `scraper_sources` logo apos a resposta de sucesso da API.
-- Re-buscar a lista de fontes (`fetchSources()`) para atualizar a tabela.
+Dentro do `CardContent` de cada produto, adicionar:
 
-### 2. Adicionar coluna "Ultima Execucao" na tabela
+- **Badge de Categoria**: Se `s.metadata?.categoria` existir, mostrar uma `Badge` com o texto da categoria.
+- **Selo Open Box**: Se `s.metadata?.is_buy_box === true`, mostrar uma `Badge` vermelha/laranja com "Open Box / Reembalado".
+- **Validade da Promocao**: Se `s.metadata?.validade_fim` existir, mostrar um texto com icone de relogio "Valido ate: DD/MM/AAAA HH:mm" usando `format` do `date-fns`.
+- **Rating e Installments**: Remover `line-clamp` do rating e garantir que `installments` tenha espaco para textos longos (usar `text-xs` com `break-words`).
 
-Mostrar a data/hora formatada de `last_run_at` para o utilizador saber quando foi a ultima sincronizacao.
+### 3. Novos Filtros (ScrapeFilters.tsx)
 
-### 3. (Opcional) Polling automatico
+Adicionar dois novos filtros ao componente `ScrapeFilters`:
 
-Adicionar um `setInterval` que re-busca as fontes a cada 30 segundos enquanto houver alguma fonte com status `"running"`, para detetar quando o scraper externo termina e muda o status.
+- **Filtro de Categoria**: Um `Select` que recebe a lista de categorias unicas extraidas dos scrapes (calculadas no `Pipeline.tsx` via `useMemo`). Permite filtrar por uma categoria especifica.
+- **Filtro "Ocultar Open Box"**: Um `Checkbox` com label "Ocultar Open Box" que, quando ativo, remove itens onde `metadata?.is_buy_box === true`.
+
+### 4. Logica de Filtragem (Pipeline.tsx)
+
+No `useMemo` de `filteredScrapes`, adicionar:
+
+- Filtragem por `filterCategory` (novo estado string, default `"all"`).
+- Filtragem por `hideOpenBox` (novo estado boolean, default `false`).
+- Calculo de categorias unicas: `useMemo` que extrai todas as `metadata?.categoria` distintas dos scrapes.
 
 ## Detalhes Tecnicos
 
-### Ficheiro: `src/pages/Sources.tsx`
+### Ficheiros a alterar
 
-**Na funcao `handleSync`, apos `res.ok`:**
+**`src/pages/Pipeline.tsx`**:
+- Adicionar `metadata` ao tipo `RawScrape`
+- Importar `format` de `date-fns` e `Clock` de `lucide-react`
+- Adicionar estados `filterCategory` (string) e `hideOpenBox` (boolean)
+- Calcular `uniqueCategories` via `useMemo`
+- Aplicar novos filtros no `filteredScrapes`
+- Atualizar JSX dos cartoes com badges de categoria, selo Open Box, e validade
+- Passar novos props ao `ScrapeFilters`
 
-```text
-await supabase
-  .from("scraper_sources")
-  .update({ status: "running", last_run_at: new Date().toISOString() })
-  .eq("id", source.id);
-fetchSources();
-```
+**`src/components/pipeline/ScrapeFilters.tsx`**:
+- Adicionar props: `filterCategory`, `onFilterCategoryChange`, `categories` (string[]), `hideOpenBox`, `onHideOpenBoxChange`
+- Adicionar Select de categorias e Checkbox "Ocultar Open Box"
+- Incluir novos filtros na logica de `hasFilters` e `clearFilters`
 
-**Na tabela, adicionar coluna "Ultima Execucao":**
+### Tratamento de metadata nulo
 
-- Novo `<TableHead>` com texto "Ultima Execucao".
-- Novo `<TableCell>` que formata `s.last_run_at` usando `date-fns` (ex: `formatDistanceToNow`), ou mostra "Nunca" se for null.
-
-**Polling (opcional):**
-
-- Usar `useEffect` com `setInterval` de 30s que chama `fetchSources()` se alguma fonte tiver status `"running"`.
-- Limpar o intervalo no cleanup do effect.
+Todo o acesso ao metadata usa optional chaining (`s.metadata?.categoria`), garantindo compatibilidade com produtos antigos que tenham metadata nulo ou sem os novos campos.
 
