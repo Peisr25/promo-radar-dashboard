@@ -12,13 +12,92 @@ function getMedal(discount: number): string {
   return "🥉";
 }
 
+function buildDefaultPrompt(): string {
+  return `Aja como o dono de um grupo de promoções no WhatsApp chamado 'Urubu das Promoções'. O seu público gosta de humor irónico, piadas sobre ser pobre, chifres, vida adulta, academia ou morar sozinho.
+
+Baseado no produto fornecido, crie uma mensagem promocional seguindo EXATAMENTE esta estrutura (não adicione nada a mais):
+
+Linha 1: Um emoji de medalha (🥇, 🥈 ou 🥉 baseado no desconto) seguido de UMA FRASE ENGRAÇADA E IRÓNICA EM LETRAS MAIÚSCULAS RELACIONADA AO PRODUTO (máximo 8 palavras).
+Linha 2: Vazia.
+Linha 3: O título do produto (em Title Case).
+Linha 4: Vazia.
+Linha 5: O preço formatado.
+Linha 6: O link do produto.
+
+REGRAS:
+- Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
+- Humor brasileiro, memes e referências da cultura pop.
+- Sem palavrões ou linguagem ofensiva.
+
+Exemplo:
+🥈 NINGUÉM MERECE COMER MARMITA FRIA
+
+Micro-ondas Electrolux 23L Branco Efficient
+
+por R$ 469,00 em 10x sem juros
+https://exemplo.com`;
+}
+
+function buildCustomPrompt(options: {
+  highlight_discount: boolean;
+  highlight_installments: boolean;
+  highlight_open_box: boolean;
+  highlight_urgency: boolean;
+  tone: string;
+  discount_percentage?: string;
+  installments?: string;
+  is_buy_box?: boolean;
+}): string {
+  const toneMap: Record<string, string> = {
+    funny: "Engraçado e descontraído, com humor brasileiro",
+    direct: "Direto, profissional e focado em conversão",
+    aggressive: "Agressivo e urgente, criando FOMO (medo de perder)",
+  };
+
+  const toneText = toneMap[options.tone] || toneMap.funny;
+
+  let highlights = "";
+  if (options.highlight_discount && options.discount_percentage) {
+    highlights += `\n- Destaque que o produto está com ${options.discount_percentage}% de desconto.`;
+  }
+  if (options.highlight_installments && options.installments) {
+    highlights += `\n- Destaque o parcelamento: ${options.installments}.`;
+  }
+  if (options.highlight_open_box && options.is_buy_box) {
+    highlights += `\n- Alerte de forma positiva que é um produto reembalado/Open Box, garantindo que está em perfeito estado.`;
+  }
+  if (options.highlight_urgency) {
+    highlights += `\n- Crie urgência mencionando que há poucas unidades disponíveis.`;
+  }
+
+  return `Escreva uma mensagem de WhatsApp para vender o produto abaixo. A estrutura deve ser limpa, focada em conversão, e incluir emojis.
+
+${highlights ? `Destaques OBRIGATÓRIOS na mensagem:${highlights}` : ""}
+
+O Tom de voz deve ser: ${toneText}.
+
+Finalize sempre com o Preço e o Link.
+
+REGRAS:
+- Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
+- Sem palavrões ou linguagem ofensiva.`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { product_title, price, old_price, discount_percentage, rating, installments, price_type, original_url, system_prompt } = await req.json();
+    const body = await req.json();
+    const {
+      product_title, price, old_price, discount_percentage,
+      rating, installments, price_type, original_url,
+      system_prompt, mode,
+      // Custom mode fields
+      highlight_discount, highlight_installments,
+      highlight_open_box, highlight_urgency, tone, is_buy_box,
+    } = body;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -28,23 +107,41 @@ serve(async (req) => {
     const priceType = price_type === "PIX" ? "no Pix" : "à Vista";
     const formattedPrice = Number(price ?? 0).toFixed(2).replace(".", ",");
 
-    const defaultPrompt = `Você é um copywriter especializado em criar títulos engraçados e criativos para promoções de produtos em grupos de WhatsApp/Telegram brasileiros.
+    // Choose prompt based on mode
+    let chosenPrompt: string;
+    if (system_prompt) {
+      chosenPrompt = system_prompt;
+    } else if (mode === "custom") {
+      chosenPrompt = buildCustomPrompt({
+        highlight_discount: !!highlight_discount,
+        highlight_installments: !!highlight_installments,
+        highlight_open_box: !!highlight_open_box,
+        highlight_urgency: !!highlight_urgency,
+        tone: tone ?? "funny",
+        discount_percentage,
+        installments,
+        is_buy_box: !!is_buy_box,
+      });
+    } else {
+      chosenPrompt = buildDefaultPrompt();
+    }
 
-REGRAS OBRIGATÓRIAS:
-- Máximo 8 palavras
-- TUDO EM CAPS LOCK
-- Humor brasileiro, memes e referências da cultura pop
-- Relacionado ao benefício ou característica do produto
-- Sem palavrões ou linguagem ofensiva
-- Seja criativo e original
-- Responda APENAS com o título, sem aspas, sem explicação
+    // Build user message
+    let userContent = `Produto: ${product_title}\nPreço: R$ ${formattedPrice}`;
+    if (old_price && discount > 0) {
+      userContent += `\nPreço antigo: R$ ${Number(old_price).toFixed(2).replace(".", ",")}`;
+      userContent += `\nDesconto: ${discount}%`;
+    }
+    if (installments) userContent += `\nParcelamento: ${installments}`;
+    if (price_type) userContent += `\nTipo de pagamento: ${price_type}`;
+    if (rating) userContent += `\nAvaliação: ${rating}`;
+    if (original_url) userContent += `\nLink: ${original_url}`;
 
-ESTRATÉGIAS DE HUMOR:
-1. Comparação absurda: "O SEU DO CAMELÔ NÃO AGUENTA MAIS"
-2. Referências nostálgicas: "SÓ PERDE PRA MOCHILA DO BEN 10"
-3. Problema/solução: "IMPOSSIVEL ERRAR O ARROZ COM UMA DESSA"
-4. Exagero cômico: "TÃO BARATO QUE DÁ MEDO"
-5. Memes: "STONKS 📈", "É HOJE QUE O PATRÃO CHORA"`;
+    if (mode !== "custom") {
+      userContent += `\n\nCrie a mensagem seguindo a estrutura indicada:`;
+    } else {
+      userContent += `\n\nCrie a mensagem promocional:`;
+    }
 
     // Retry up to 2 times on 5xx errors
     let response: Response | null = null;
@@ -58,11 +155,8 @@ ESTRATÉGIAS DE HUMOR:
         body: JSON.stringify({
           model: "google/gemini-3-flash-preview",
           messages: [
-            { role: "system", content: system_prompt || defaultPrompt },
-            {
-              role: "user",
-              content: `Produto: ${product_title}\nDesconto: ${discount}%\nPreço: R$ ${formattedPrice}\nAvaliação: ${rating ?? "N/A"}\n\nCrie UM título criativo em CAPS LOCK (máximo 8 palavras):`,
-            },
+            { role: "system", content: chosenPrompt },
+            { role: "user", content: userContent },
           ],
         }),
       });
@@ -88,7 +182,7 @@ ESTRATÉGIAS DE HUMOR:
     }
 
     if (!response || !response.ok) {
-      // Fallback: use a generic creative title instead of failing
+      // Fallback
       console.warn("AI gateway unavailable, using fallback title");
       const fallbackTitle = "PROMOÇÃO IMPERDÍVEL";
       const formatBRL = (v: number) => v.toFixed(2).replace(".", ",");
@@ -106,21 +200,7 @@ ESTRATÉGIAS DE HUMOR:
     }
 
     const data = await response.json();
-    const creativeTitle = (data.choices?.[0]?.message?.content?.trim().toUpperCase() ?? "PROMOÇÃO IMPERDÍVEL");
-
-    // Build the full message
-    const formatBRL = (v: number) => v.toFixed(2).replace(".", ",");
-
-    let message = `${medal} ${creativeTitle}\n\n`;
-    message += `${product_title}\n\n`;
-    if (old_price && discount > 0) {
-      message += `🎟 ~R$ ${formatBRL(Number(old_price))}~ por R$ ${formatBRL(Number(price))} (*${discount}% OFF*)${priceType ? ` ${priceType}` : ''}\n\n`;
-    } else {
-      message += `💰 R$ ${formattedPrice} ${priceType}\n\n`;
-    }
-    if (original_url) {
-      message += original_url;
-    }
+    const message = data.choices?.[0]?.message?.content?.trim() ?? "PROMOÇÃO IMPERDÍVEL";
 
     return new Response(JSON.stringify({ message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

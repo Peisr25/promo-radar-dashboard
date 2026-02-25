@@ -2,3 +2,9 @@ project_id = "hrczyxqigiqnrpsbqmut"
 
 [functions.send-whatsapp-message]
 verify_jwt = false
+
+[functions.generate-promo-message]
+verify_jwt = false
+
+[functions.start-scrape]
+verify_jwt = false

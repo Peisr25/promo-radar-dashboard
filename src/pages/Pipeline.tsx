@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { shortenLink } from "@/lib/link-shortener";
 import { sendWhatsAppMessage } from "@/lib/evolution-api";
 import type { Tables } from "@/integrations/supabase/types";
+import { GenerateCopyModal } from "@/components/pipeline/GenerateCopyModal";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -62,6 +63,8 @@ export default function Pipeline() {
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [sendingPromotion, setSendingPromotion] = useState<Promotion | null>(null);
   const [sending, setSending] = useState(false);
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [copyModalProduct, setCopyModalProduct] = useState<RawScrape | null>(null);
 
   // Filter & sort state
   const [sortBy, setSortBy] = useState<SortOption>("discount");
@@ -404,10 +407,15 @@ export default function Pipeline() {
                         Válido até: {format(new Date((s.metadata as any).validade_fim), "dd/MM/yyyy HH:mm")}
                       </p>
                     )}
-                    <Button className="w-full" onClick={() => processPromotion(s)} disabled={processing === s.id}>
-                      {processing === s.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                      Processar Promoção
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button className="flex-1" onClick={() => processPromotion(s)} disabled={processing === s.id}>
+                        {processing === s.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                        Processar
+                      </Button>
+                      <Button variant="outline" onClick={() => { setCopyModalProduct(s); setCopyModalOpen(true); }}>
+                        <MessageCircle className="mr-1 h-4 w-4" /> Gerar Copy
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -579,6 +587,11 @@ export default function Pipeline() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <GenerateCopyModal
+        open={copyModalOpen}
+        onOpenChange={setCopyModalOpen}
+        product={copyModalProduct}
+      />
     </div>
   );
 }
