@@ -1,39 +1,35 @@
 
+# Corrigir link encurtado na mensagem gerada pela IA
 
-# Filtro por Fonte no Pipeline
+## Problema
+A Edge Function `generate-promo-message` recebe o `original_url` (ja encurtado pelo frontend) mas so o adiciona a mensagem no caso de **fallback** (quando a IA falha). Quando a IA gera a mensagem com sucesso (linha 195-198), o link e simplesmente ignorado -- a funcao retorna apenas o texto da IA sem o URL.
 
-## Resumo
-Adicionar tabs de filtragem por fonte (Todas, Magalu, Shopee) no topo da pagina Pipeline e badges visuais nos cards de produtos.
+Isto afeta todas as fontes (Magalu e Shopee), mas pode ter passado despercebido se as mensagens eram editadas manualmente antes do envio.
 
-## Alteracoes
+## Correcao
 
-### 1. Estado e logica de filtragem (`src/pages/Pipeline.tsx`)
+### Ficheiro: `supabase/functions/generate-promo-message/index.ts`
 
-- Adicionar estado `sourceFilter` com valores `"all" | "magalu" | "shopee"`, default `"all"`.
-- No componente `<TabsList>` de fontes, colocar logo abaixo do titulo `<h1>` e acima das tabs existentes ("Novos Achados", "Revisao", "Fila").
-- Aplicar o filtro de source no `useMemo` de `filteredScrapes` -- antes dos outros filtros, filtrar por `s.source === sourceFilter` quando nao for `"all"`.
-- Atualizar a contagem exibida nas tabs existentes para refletir o filtro de fonte ativo.
-
-### 2. Tabs de fonte (UI)
+Nas linhas 194-198, apos obter a resposta da IA, concatenar o `original_url` ao final da mensagem:
 
 ```text
-[Todas as Fontes (123)] [Magalu (80)] [Shopee (43)]
+// De (atual):
+const message = data.choices?.[0]?.message?.content?.trim() ?? "...";
+return new Response(JSON.stringify({ message }), ...);
+
+// Para (corrigido):
+const aiText = data.choices?.[0]?.message?.content?.trim() ?? "...";
+const message = original_url ? `${aiText}\n\n${original_url}` : aiText;
+return new Response(JSON.stringify({ message }), ...);
 ```
 
-Usar o componente `<Tabs>` com `onValueChange` (modo controlado) em vez de `defaultValue`, para manter o estado no componente pai. As tabs de fonte ficam separadas das tabs de etapas do pipeline.
-
-### 3. Badge de identificacao visual nos cards
-
-No bloco de badges existente (linha ~379-386), adicionar um `<Badge>` com a fonte:
-- `source === "magalu"` -- fundo azulado (`bg-blue-100 text-blue-700`)
-- `source === "shopee"` -- fundo alaranjado (`bg-orange-100 text-orange-700`)
-- Outras fontes -- badge neutro com o nome da fonte
+Isto garante que o link encurtado (ex: `https://radardaspromos.lovable.app/r/AbCdEf`) aparece sempre no final da mensagem gerada, independentemente da fonte ou do modo utilizado.
 
 ### Ficheiros alterados
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/pages/Pipeline.tsx` | Adicionar estado `sourceFilter`, tabs de fonte no topo, filtro no `useMemo`, badges de fonte nos cards |
+| `supabase/functions/generate-promo-message/index.ts` | Linhas 194-198: concatenar `original_url` ao texto da IA |
 
-Nenhuma alteracao a base de dados ou a componentes filhos e necessaria -- tudo e resolvido dentro do Pipeline.tsx.
-
+### Apos edicao
+Redeploy automatico da Edge Function `generate-promo-message`.
