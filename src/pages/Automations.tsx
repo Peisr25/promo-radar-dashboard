@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,7 +29,23 @@ export default function Automations() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+
+  // Query motor_control to know if engine is running
+  const { data: motorControl } = useQuery({
+    queryKey: ["motor_control"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("motor_control")
+        .select("is_running")
+        .maybeSingle();
+      if (error) throw error;
+      return data as { is_running: boolean } | null;
+    },
+    enabled: !!session,
+    refetchInterval: 3000, // poll every 3s while page is open
+  });
+
+  const isMotorRunning = motorControl?.is_running ?? false;
 
   const { data: rules, isLoading } = useQuery({
     queryKey: ["automation_rules"],
@@ -88,16 +104,23 @@ export default function Automations() {
 
   const runEngineMutation = useMutation({
     mutationFn: async () => {
-      const controller = new AbortController();
-      abortRef.current = controller;
+      // Upsert motor_control to is_running = true
+      const { data: existing } = await supabase
+        .from("motor_control")
+        .select("id")
+        .maybeSingle();
+
+      if (existing) {
+        await supabase.from("motor_control").update({ is_running: true }).eq("id", existing.id);
+      } else {
+        await supabase.from("motor_control").insert({ is_running: true, user_id: session!.user.id });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["motor_control"] });
+
       const { data, error } = await supabase.functions.invoke("process-automations", {
         body: {},
-        headers: {},
       });
-      abortRef.current = null;
-      if (controller.signal.aborted) {
-        throw new Error("Execução cancelada pelo utilizador.");
-      }
       if (error) throw error;
       return data as { processed: number; sent: number; errors: number; skipped: number };
     },
@@ -107,24 +130,32 @@ export default function Automations() {
         description: `${data.sent} enviados, ${data.skipped} ignorados, ${data.errors} erros.`,
       });
       queryClient.invalidateQueries({ queryKey: ["automation_rules"] });
+      queryClient.invalidateQueries({ queryKey: ["automation_logs"] });
+      queryClient.invalidateQueries({ queryKey: ["motor_control"] });
     },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      toast({
-        title: msg.includes("cancelada") ? "Execução interrompida" : "Erro ao executar motor",
-        description: msg,
-        variant: msg.includes("cancelada") ? "default" : "destructive",
-      });
-    },
-    onSettled: () => {
-      abortRef.current = null;
+      toast({ title: "Erro ao executar motor", description: msg, variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["motor_control"] });
     },
   });
 
-  const handleStop = () => {
-    abortRef.current?.abort();
-    runEngineMutation.reset();
-    toast({ title: "Solicitação de parada enviada" });
+  const handleStop = async () => {
+    try {
+      const { data: existing } = await supabase
+        .from("motor_control")
+        .select("id")
+        .maybeSingle();
+
+      if (existing) {
+        await supabase.from("motor_control").update({ is_running: false }).eq("id", existing.id);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["motor_control"] });
+      toast({ title: "Solicitação de parada enviada", description: "O motor irá parar na próxima iteração." });
+    } catch {
+      toast({ title: "Erro ao parar motor", variant: "destructive" });
+    }
   };
 
   const modeLabel = (mode: string) =>
@@ -140,20 +171,25 @@ export default function Automations() {
           </p>
         </div>
         <div className="flex gap-2">
-          {runEngineMutation.isPending ? (
+          {isMotorRunning || runEngineMutation.isPending ? (
             <Button
               variant="destructive"
               onClick={handleStop}
             >
               <Square className="mr-2 h-4 w-4" />
-              Parar Execução
+              Pausar Motor
             </Button>
           ) : (
             <Button
               variant="outline"
               onClick={() => runEngineMutation.mutate()}
+              disabled={runEngineMutation.isPending}
             >
-              <Play className="mr-2 h-4 w-4" />
+              {runEngineMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="mr-2 h-4 w-4" />
+              )}
               Executar Motor Agora
             </Button>
           )}

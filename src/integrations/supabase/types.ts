@@ -168,6 +168,27 @@ export type Database = {
         }
         Relationships: []
       }
+      motor_control: {
+        Row: {
+          id: string
+          is_running: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_running?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_running?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       promotions: {
         Row: {
           ai_message: string | null
