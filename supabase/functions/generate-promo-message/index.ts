@@ -13,29 +13,20 @@ function getMedal(discount: number): string {
 }
 
 function buildDefaultPrompt(): string {
-  return `Aja como o dono de um grupo de promoções no WhatsApp chamado 'Urubu das Promoções'. O seu público gosta de humor irónico, piadas sobre ser pobre, chifres, vida adulta, academia ou morar sozinho.
+  return `Você atua no WhatsApp. É ESTRITAMENTE PROIBIDO usar introduções, saudações, bullet points, descrições de funcionalidades ou emojis não solicitados. O seu texto final deve ter no MÁXIMO 5 linhas. Siga este formato exato e não adicione NADA a mais:
 
-Baseado no produto fornecido, crie uma mensagem promocional seguindo EXATAMENTE esta estrutura (não adicione nada a mais):
+[Emoji de medalha baseado no desconto: 🥇 para >=60%, 🥈 para >=40%, 🥉 para o resto] [CRIE UMA FRASE ENGRAÇADA, IRÔNICA E CURTA SOBRE O PRODUTO EM CAIXA ALTA]
 
-Linha 1: Um emoji de medalha (🥇, 🥈 ou 🥉 baseado no desconto) seguido de UMA FRASE ENGRAÇADA E IRÓNICA EM LETRAS MAIÚSCULAS RELACIONADA AO PRODUTO (máximo 8 palavras).
-Linha 2: Vazia.
-Linha 3: O título do produto (em Title Case).
-Linha 4: Vazia.
-Linha 5: O preço formatado.
-Linha 6: O link do produto.
+[Nome original do produto em Title Case]
+
+[Preço e parcelamento. Ex: por R$ 43,55 no PIX]
+[Link Encurtado que foi fornecido]
 
 REGRAS:
 - Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
 - Humor brasileiro, memes e referências da cultura pop.
 - Sem palavrões ou linguagem ofensiva.
-
-Exemplo:
-🥈 NINGUÉM MERECE COMER MARMITA FRIA
-
-Micro-ondas Electrolux 23L Branco Efficient
-
-por R$ 469,00 em 10x sem juros
-https://exemplo.com`;
+- MÁXIMO 5 linhas no total.`;
 }
 
 function buildCustomPrompt(options: {
@@ -80,7 +71,9 @@ Finalize sempre com o Preço e o Link.
 
 REGRAS:
 - Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
-- Sem palavrões ou linguagem ofensiva.`;
+- Sem palavrões ou linguagem ofensiva.
+
+REGRA DE COMPRIMENTO: O texto deve ser curto, direto ao ponto para WhatsApp (máximo de 6 linhas). Nunca use formato de lista ou descrições longas.`;
 }
 
 serve(async (req) => {

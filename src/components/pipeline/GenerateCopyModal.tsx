@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Sparkles, Copy, Loader2 } from "lucide-react";
+import { shortenLink } from "@/lib/link-shortener";
 
 interface ProductData {
   id: number;
@@ -68,6 +69,20 @@ export function GenerateCopyModal({ open, onOpenChange, product }: GenerateCopyM
     setCopied(false);
 
     try {
+      // Shorten URL first
+      let finalUrl = product.original_url ?? "";
+      if (finalUrl) {
+        const { shortUrl, error: linkError } = await shortenLink({
+          originalUrl: finalUrl,
+          productTitle: product.product_title ?? undefined,
+        });
+        if (linkError) {
+          toast({ title: "Erro ao encurtar link", description: linkError, variant: "destructive" });
+        } else {
+          finalUrl = shortUrl;
+        }
+      }
+
       const body: Record<string, unknown> = {
         product_title: product.product_title ?? "Sem título",
         price: product.price ?? 0,
@@ -76,7 +91,7 @@ export function GenerateCopyModal({ open, onOpenChange, product }: GenerateCopyM
         rating: product.rating,
         installments: product.installments,
         price_type: product.price_type,
-        original_url: product.original_url ?? "",
+        original_url: finalUrl,
         mode,
       };
 
