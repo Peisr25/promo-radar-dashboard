@@ -385,8 +385,9 @@ Deno.serve(async (req) => {
 
         sent++;
 
-        // Anti-spam delay: 8 seconds between sends
-        await new Promise((r) => setTimeout(r, 8000));
+        // Anti-spam delay: configurable (default 8s)
+        const delaySeconds = existingCtrl?.delay_between_messages ?? 8;
+        await new Promise((r) => setTimeout(r, delaySeconds * 1000));
       } catch (e) {
         errors++;
         const errorMsg = e instanceof Error ? e.message : "Erro desconhecido";
@@ -445,13 +446,13 @@ Deno.serve(async (req) => {
     console.error("process-automations error:", e);
     // Ensure motor is stopped on crash
     if (userId) {
-      await admin.from("motor_control").update({ is_running: false, updated_at: new Date().toISOString() }).eq("user_id", userId).catch(() => {});
-      await admin.from("automation_logs").insert({
+      try { await admin.from("motor_control").update({ is_running: false, updated_at: new Date().toISOString() }).eq("user_id", userId); } catch {}
+      try { await admin.from("automation_logs").insert({
         user_id: userId,
         status: "error",
         message: `Motor crashou: ${e instanceof Error ? e.message : "Erro desconhecido"}`,
         metadata: { type: "motor_crash", error: e instanceof Error ? e.message : "Erro desconhecido" },
-      }).catch(() => {});
+      }); } catch {}
     }
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }),

@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
           .eq("user_id", userId);
 
         return new Response(
-          JSON.stringify({ success: false, message: e.message }),
+          JSON.stringify({ success: false, message: (e as Error).message }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -156,10 +156,10 @@ Deno.serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } catch (e) {
-          const isTimeout = e.name === "AbortError";
+          const isTimeout = (e as Error).name === "AbortError";
           const msg = isTimeout
             ? "Timeout ao listar grupos. Tente reiniciar a instância na Evolution API."
-            : e.message;
+            : (e as Error).message;
           console.log(`Fetch groups error (attempt ${attempt}): ${msg}`);
           if (attempt < maxRetries) {
             await new Promise((r) => setTimeout(r, retryDelayMs));
@@ -212,7 +212,7 @@ Deno.serve(async (req) => {
         );
       } catch (e) {
         return new Response(
-          JSON.stringify({ success: false, message: e.message }),
+          JSON.stringify({ success: false, message: (e as Error).message }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
     );
   } catch (e) {
     return new Response(
-      JSON.stringify({ error: e.message }),
+      JSON.stringify({ error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

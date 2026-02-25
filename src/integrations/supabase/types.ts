@@ -173,6 +173,7 @@ export type Database = {
       }
       motor_control: {
         Row: {
+          delay_between_messages: number
           id: string
           is_running: boolean
           last_run_at: string | null
@@ -185,6 +186,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          delay_between_messages?: number
           id?: string
           is_running?: boolean
           last_run_at?: string | null
@@ -197,6 +199,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          delay_between_messages?: number
           id?: string
           is_running?: boolean
           last_run_at?: string | null
@@ -439,6 +442,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      source_credentials: {
+        Row: {
+          created_at: string
+          credentials: Json
+          id: string
+          source_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credentials?: Json
+          id?: string
+          source_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credentials?: Json
+          id?: string
+          source_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       whatsapp_groups: {
         Row: {
