@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bot, Plus, Trash2, Percent, MessageCircle } from "lucide-react";
+import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2 } from "lucide-react";
 import { AutomationRuleModal } from "@/components/automations/AutomationRuleModal";
 import { AutomationActivityLog } from "@/components/automations/AutomationActivityLog";
 
@@ -85,6 +85,28 @@ export default function Automations() {
     onError: () => toast({ title: "Erro ao excluir", variant: "destructive" }),
   });
 
+  const runEngineMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("process-automations");
+      if (error) throw error;
+      return data as { processed: number; sent: number; errors: number; skipped: number };
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Motor executado",
+        description: `${data.sent} enviados, ${data.skipped} ignorados, ${data.errors} erros.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["automation_rules"] });
+    },
+    onError: (err) => {
+      toast({
+        title: "Erro ao executar motor",
+        description: err instanceof Error ? err.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    },
+  });
+
   const modeLabel = (mode: string) =>
     mode === "urubu_padrao" ? "🦅 Modo Urubu" : "🎯 Personalizado";
 
@@ -97,10 +119,24 @@ export default function Automations() {
             Regras de envio automático para grupos do WhatsApp
           </p>
         </div>
-        <Button onClick={() => setModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Automação
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => runEngineMutation.mutate()}
+            disabled={runEngineMutation.isPending}
+          >
+            {runEngineMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="mr-2 h-4 w-4" />
+            )}
+            Executar Motor Agora
+          </Button>
+          <Button onClick={() => setModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Automação
+          </Button>
+        </div>
       </div>
 
       {isLoading && (
