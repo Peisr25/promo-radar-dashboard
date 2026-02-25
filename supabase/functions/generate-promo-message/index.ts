@@ -20,12 +20,12 @@ function buildDefaultPrompt(): string {
 [Nome original do produto em Title Case]
 
 [Preço e parcelamento. Ex: por R$ 43,55 no PIX]
-[Link Encurtado que foi fornecido]
 
 REGRAS:
 - Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
 - Humor brasileiro, memes e referências da cultura pop.
 - Sem palavrões ou linguagem ofensiva.
+- NÃO inclua links ou URLs na resposta. O link será adicionado automaticamente.
 - MÁXIMO 5 linhas no total.`;
 }
 
@@ -67,11 +67,10 @@ ${highlights ? `Destaques OBRIGATÓRIOS na mensagem:${highlights}` : ""}
 
 O Tom de voz deve ser: ${toneText}.
 
-Finalize sempre com o Preço e o Link.
-
 REGRAS:
 - Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
 - Sem palavrões ou linguagem ofensiva.
+- NÃO inclua links ou URLs na resposta. O link será adicionado automaticamente.
 
 REGRA DE COMPRIMENTO: O texto deve ser curto, direto ao ponto para WhatsApp (máximo de 6 linhas). Nunca use formato de lista ou descrições longas.`;
 }
@@ -128,7 +127,7 @@ serve(async (req) => {
     if (installments) userContent += `\nParcelamento: ${installments}`;
     if (price_type) userContent += `\nTipo de pagamento: ${price_type}`;
     if (rating) userContent += `\nAvaliação: ${rating}`;
-    if (original_url) userContent += `\nLink: ${original_url}`;
+    // original_url intentionally omitted to prevent AI from hallucinating links
 
     if (mode !== "custom") {
       userContent += `\n\nCrie a mensagem seguindo a estrutura indicada:`;
