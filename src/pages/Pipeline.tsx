@@ -466,7 +466,7 @@ export default function Pipeline() {
                           <Button variant="outline" size="sm" onClick={async () => {
                             toast({ title: "⏳ Regenerando mensagem..." });
                             const shortUrl = p.short_link_code
-                              ? `${window.location.origin}/r/${p.short_link_code}`
+                              ? `https://radardaspromos.lovable.app/r/${p.short_link_code}`
                               : p.product_url ?? "";
                             const msg = await generateMessage({
                               product_title: p.product_name,
