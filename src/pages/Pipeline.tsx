@@ -73,6 +73,7 @@ export default function Pipeline() {
   const [filterPriceRange, setFilterPriceRange] = useState<PriceRangeFilter>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [hideOpenBox, setHideOpenBox] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "magalu" | "shopee">("all");
 
   const fetchAll = async () => {
     const [s, r, q] = await Promise.all([
@@ -146,6 +147,10 @@ export default function Pipeline() {
   const filteredScrapes = useMemo(() => {
     let filtered = [...scrapes];
 
+    if (sourceFilter !== "all") {
+      filtered = filtered.filter(s => s.source === sourceFilter);
+    }
+
     if (filterDiscount !== "all") {
       const min = parseInt(filterDiscount);
       filtered = filtered.filter(s => parseInt(s.discount_percentage ?? "0") >= min);
@@ -190,7 +195,7 @@ export default function Pipeline() {
     });
 
     return filtered;
-  }, [scrapes, sortBy, filterDiscount, filterPriceType, filterPriceRange, filterCategory, hideOpenBox]);
+  }, [scrapes, sortBy, filterDiscount, filterPriceType, filterPriceRange, filterCategory, hideOpenBox, sourceFilter]);
 
   const generateMessage = async (productData: {
     product_title: string; price: number; old_price?: number | null;
@@ -329,9 +334,23 @@ export default function Pipeline() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Pipeline de Promoções</h1>
+
+      {/* Source filter tabs */}
+      <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "magalu" | "shopee")}>
+        <TabsList>
+          <TabsTrigger value="all">Todas as Fontes ({scrapes.length})</TabsTrigger>
+          <TabsTrigger value="magalu">
+            <span className="inline-flex items-center gap-1.5">🔵 Magalu ({scrapes.filter(s => s.source === "magalu").length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="shopee">
+            <span className="inline-flex items-center gap-1.5">🟠 Shopee ({scrapes.filter(s => s.source === "shopee").length})</span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <Tabs defaultValue="new">
         <TabsList>
-          <TabsTrigger value="new">Novos Achados ({scrapes.length})</TabsTrigger>
+          <TabsTrigger value="new">Novos Achados ({filteredScrapes.length})</TabsTrigger>
           <TabsTrigger value="review">Revisão e IA ({reviewItems.length})</TabsTrigger>
           <TabsTrigger value="queue">Fila WhatsApp ({queueItems.length})</TabsTrigger>
         </TabsList>
@@ -377,6 +396,15 @@ export default function Pipeline() {
                   )}
                   <CardContent className="p-4 space-y-2">
                     <div className="flex flex-wrap gap-1.5 mb-1">
+                      {s.source === "magalu" && (
+                        <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">Magalu</Badge>
+                      )}
+                      {s.source === "shopee" && (
+                        <Badge className="text-xs bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">Shopee</Badge>
+                      )}
+                      {s.source && s.source !== "magalu" && s.source !== "shopee" && (
+                        <Badge variant="secondary" className="text-xs">{s.source}</Badge>
+                      )}
                       {(s.metadata as any)?.categoria && (
                         <Badge variant="secondary" className="text-xs">{(s.metadata as any).categoria}</Badge>
                       )}
