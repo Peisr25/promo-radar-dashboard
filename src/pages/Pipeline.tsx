@@ -65,6 +65,7 @@ export default function Pipeline() {
   const [sending, setSending] = useState(false);
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [copyModalProduct, setCopyModalProduct] = useState<any>(null);
+  const [categorizing, setCategorizing] = useState(false);
 
   // Filter & sort state
   const [sortBy, setSortBy] = useState<SortOption>("discount");
@@ -143,6 +144,43 @@ export default function Pipeline() {
       .filter((c): c is string => !!c);
     return [...new Set(cats)].sort();
   }, [scrapes]);
+
+  const uncategorizedShopee = useMemo(() => {
+    return scrapes.filter(s =>
+      s.source === "shopee" &&
+      (!s.metadata?.categoria || s.metadata.categoria === "Shopee Geral")
+    );
+  }, [scrapes]);
+
+  const handleAutoCategorize = async () => {
+    if (uncategorizedShopee.length === 0) return;
+    setCategorizing(true);
+    toast({ title: "✨ Categorizando produtos...", description: `${uncategorizedShopee.length} produtos a categorizar com IA.` });
+
+    try {
+      const products = uncategorizedShopee.map(s => ({
+        id: s.id,
+        product_title: s.product_title ?? "Sem título",
+      }));
+
+      const { data, error } = await supabase.functions.invoke("auto-categorize", {
+        body: { products },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Categorização concluída!",
+        description: `${data.updated} produto(s) categorizado(s).`,
+      });
+      fetchAll();
+    } catch (e: any) {
+      console.error("Auto-categorize error:", e);
+      toast({ title: "Erro na categorização", description: e.message ?? "Erro desconhecido", variant: "destructive" });
+    } finally {
+      setCategorizing(false);
+    }
+  };
 
   const filteredScrapes = useMemo(() => {
     let filtered = [...scrapes];
@@ -356,7 +394,13 @@ export default function Pipeline() {
         </TabsList>
 
         <TabsContent value="new">
-          <div className="flex justify-end mb-2">
+          <div className="flex justify-end gap-2 mb-2">
+            {uncategorizedShopee.length > 0 && (sourceFilter === "shopee" || sourceFilter === "all") && (
+              <Button variant="secondary" size="sm" onClick={handleAutoCategorize} disabled={categorizing}>
+                {categorizing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                Auto-Categorizar ({uncategorizedShopee.length})
+              </Button>
+            )}
             <Button variant="destructive" size="sm" onClick={deleteAllScrapes} disabled={scrapes.length === 0}>
               Apagar Todos ({scrapes.length})
             </Button>
