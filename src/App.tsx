@@ -13,6 +13,7 @@ import SettingsPage from "@/pages/Settings";
 import ScraperLogs from "@/pages/ScraperLogs";
 import ShortLinks from "@/pages/ShortLinks";
 import WhatsAppSettings from "@/pages/WhatsAppSettings";
+import Automations from "@/pages/Automations";
 import Redirect from "@/pages/Redirect";
 import NotFound from "./pages/NotFound";
 
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
               <Route path="/sources" element={<Sources />} />
               <Route path="/pipeline" element={<Pipeline />} />
+              <Route path="/automations" element={<Automations />} />
               <Route path="/scraper-logs" element={<ScraperLogs />} />
               <Route path="/links" element={<ShortLinks />} />
               <Route path="/whatsapp" element={<WhatsAppSettings />} />

@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_rules: {
+        Row: {
+          ai_mode: string
+          categories: string[]
+          created_at: string
+          custom_ai_options: Json | null
+          id: string
+          is_active: boolean
+          min_discount: number
+          name: string
+          target_group_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_mode?: string
+          categories?: string[]
+          created_at?: string
+          custom_ai_options?: Json | null
+          id?: string
+          is_active?: boolean
+          min_discount?: number
+          name: string
+          target_group_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_mode?: string
+          categories?: string[]
+          created_at?: string
+          custom_ai_options?: Json | null
+          id?: string
+          is_active?: boolean
+          min_discount?: number
+          name?: string
+          target_group_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       click_logs: {
         Row: {
           clicked_at: string
