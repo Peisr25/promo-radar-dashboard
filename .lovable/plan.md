@@ -1,81 +1,93 @@
 
 
-# Mini Log de Atividades para Automacoes
+# Motor de Automacao (process-automations)
 
 ## Resumo
 
-Adicionar uma tabela `automation_logs` ao banco de dados e um componente visual de log compacto (estilo timeline) na pagina de Automacoes, com atualizacao em tempo real via Realtime.
+Criar a Edge Function `process-automations` que cruza scrapes pendentes com regras ativas, gera copy via IA e envia para WhatsApp automaticamente. Adicionar botao de gatilho manual na UI.
 
 ## Alteracoes
 
-### 1. Nova tabela `automation_logs` (Migracao SQL)
+### 1. Edge Function `supabase/functions/process-automations/index.ts`
 
+Logica principal:
+
+1. **Auth**: Valida JWT do utilizador via header Authorization + `getClaims()`
+2. **Fase 1 - Fetch**: Busca `automation_rules` ativas (filtradas por `user_id`) e `raw_scrapes` com `status = 'pending'`
+3. **Fase 2 - Loop**: Para cada scrape pendente, testa contra todas as regras:
+   - Match de categoria: `scrape.metadata.categoria` deve estar em `rule.categories`
+   - Match de desconto: `discount_percentage` (limpo e convertido para numero) >= `rule.min_discount`
+4. **Fase 3 - Execucao**: Quando ha match:
+   - Insere log com `status = 'processing'`
+   - Busca o `group_id` real da tabela `whatsapp_groups` usando `rule.target_group_id` (que e o UUID interno)
+   - Chama `generate-promo-message` via fetch interno com dados do produto + `ai_mode` e `custom_ai_options` da regra
+   - Chama `send-whatsapp-message` via fetch interno com `action: 'send'`, `group_id` (WhatsApp ID real) e texto gerado
+   - Atualiza log para `status = 'success'`
+   - Atualiza `raw_scrapes.status` para `'published'`
+5. **Fase 4 - Sem Match/Erro**:
+   - Erro durante processamento: atualiza log para `status = 'error'` com mensagem do erro
+   - Scrape sem match com nenhuma regra: atualiza `status` para `'skipped'`
+
+Detalhes de implementacao:
+- Usa `SUPABASE_SERVICE_ROLE_KEY` para bypass de RLS nas operacoes de UPDATE/INSERT
+- Chamadas a `generate-promo-message` e `send-whatsapp-message` sao feitas via fetch direto ao URL da funcao (usando `SUPABASE_URL`), passando o token do utilizador no header Authorization
+- Para o modo `custom`, passa as opcoes de `custom_ai_options` (highlight_discount, highlight_installments, etc.) no body do generate
+- Retorna um resumo com contagem de processados, enviados, erros e ignorados
+
+### 2. Configuracao em `supabase/config.toml`
+
+Adicionar:
 ```text
-CREATE TABLE public.automation_logs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  rule_id uuid REFERENCES public.automation_rules(id) ON DELETE SET NULL,
-  scrape_id bigint,
-  user_id uuid NOT NULL,
-  status text NOT NULL DEFAULT 'processing',
-  message text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE public.automation_logs ENABLE ROW LEVEL SECURITY;
-
--- Utilizadores autenticados veem os seus proprios logs
-CREATE POLICY "Users view own automation logs"
-ON public.automation_logs FOR SELECT
-USING (auth.uid() = user_id);
-
--- INSERT para utilizadores autenticados e service_role (edge functions)
-CREATE POLICY "Users insert own automation logs"
-ON public.automation_logs FOR INSERT
-WITH CHECK (auth.uid() = user_id);
-
--- Habilitar Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.automation_logs;
+[functions.process-automations]
+verify_jwt = false
 ```
 
-A coluna `user_id` e necessaria para que as politicas RLS filtrem logs por utilizador. `rule_id` referencia `automation_rules` com `ON DELETE SET NULL` para manter o historico mesmo se a regra for eliminada.
+### 3. Politica RLS adicional em `automation_logs`
 
-### 2. Novo componente `src/components/automations/AutomationActivityLog.tsx`
+A tabela `automation_logs` atualmente nao permite UPDATE. Como a Edge Function precisa atualizar logs de `processing` para `success`/`error`, sera necessaria uma migration para adicionar uma politica de UPDATE (ou usar o service role client que bypassa RLS - mais simples e ja e o que usamos).
 
-Componente compacto estilo timeline que:
+Como usamos `SUPABASE_SERVICE_ROLE_KEY` na Edge Function, nao precisa de nova politica -- o service role ignora RLS.
 
-- Faz fetch dos ultimos 50 registos de `automation_logs` ordenados por `created_at DESC`
-- Faz JOIN com `automation_rules` para mostrar o nome da regra (via query separada ou usando os dados ja carregados na pagina)
-- Subscreve ao canal Realtime de `automation_logs` para receber novos logs instantaneamente (INSERT events filtrados por `user_id`)
-- Design com icones e cores por status:
-  - **success**: icone CheckCircle verde
-  - **processing**: icone Clock azul
-  - **skipped**: icone SkipForward amarelo/cinza
-  - **error**: icone XCircle vermelho
-- Cada entrada mostra: badge de status, mensagem, nome da regra (se disponivel), e hora formatada ("Hoje as 14:32" / "Ontem as 09:15" / data completa)
-- ScrollArea com altura fixa para manter o layout compacto
+### 4. Atualizacao da UI (`src/pages/Automations.tsx`)
 
-### 3. Atualizacao de `src/pages/Automations.tsx`
+- Adicionar import de `Play` e `Loader2` do lucide-react
+- Adicionar um `useMutation` para invocar `process-automations` via `supabase.functions.invoke`
+- Adicionar botao "Executar Motor Agora" no header, ao lado do botao "Nova Automacao"
+- Loading state no botao enquanto executa
+- Toast de sucesso/erro ao terminar
+- Invalida a query `automation_logs` para forcar reload do Mini Log
 
-Dividir o layout da pagina em duas seccoes:
-
-- **Seccao superior**: conteudo atual (header + grid de cards de regras)
-- **Seccao inferior**: Card com titulo "Log de Atividades Recentes" contendo o componente `AutomationActivityLog`
-
-Layout responsivo: em desktop ocupa toda a largura abaixo dos cards; nao altera o layout existente dos cards.
-
-### 4. Ficheiros a criar/editar
+### 5. Ficheiros a criar/editar
 
 | Ficheiro | Acao |
 |---|---|
-| `supabase/migrations/..._automation_logs.sql` | Criar tabela + RLS + Realtime |
-| `src/components/automations/AutomationActivityLog.tsx` | Criar componente de log |
-| `src/pages/Automations.tsx` | Adicionar seccao do log abaixo dos cards |
+| `supabase/functions/process-automations/index.ts` | Criar Edge Function |
+| `supabase/config.toml` | Adicionar config verify_jwt = false |
+| `src/pages/Automations.tsx` | Adicionar botao de gatilho manual |
 
-### Detalhes tecnicos do componente de log
+### Fluxo de dados
 
-- Usa `useQuery` para fetch inicial dos 50 logs mais recentes
-- Usa `supabase.channel('automation-logs').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'automation_logs' }, callback).subscribe()` para Realtime
-- Novos logs sao adicionados ao topo do state local (prepend) sem refetch completo
-- Formatacao de hora com `date-fns` (ja instalado): `isToday` -> "Hoje as HH:mm", `isYesterday` -> "Ontem as HH:mm", caso contrario `format(date, "dd/MM HH:mm")`
-- O mapa de nomes de regras reutiliza os dados de `automation_rules` ja carregados na pagina pai, passados como prop
+```text
+[Botao UI] --> POST process-automations (com JWT do user)
+  |
+  |--> Fetch regras ativas (user_id)
+  |--> Fetch scrapes pendentes
+  |
+  |--> Para cada scrape:
+  |     |--> Testar contra cada regra (categoria + desconto)
+  |     |
+  |     |--> MATCH:
+  |     |     |--> Log (processing)
+  |     |     |--> generate-promo-message (ai_mode + options)
+  |     |     |--> send-whatsapp-message (group_id + texto)
+  |     |     |--> Log (success) + scrape status = 'published'
+  |     |
+  |     |--> ERRO:
+  |     |     |--> Log (error) + mensagem de erro
+  |     |
+  |     |--> SEM MATCH (nenhuma regra):
+  |           |--> scrape status = 'skipped'
+  |
+  |--> Retorna resumo { processed, sent, errors, skipped }
+```
 
