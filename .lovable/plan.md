@@ -1,70 +1,72 @@
 
 
-# Atualizar Pipeline de Promocoes com Dados Enriquecidos do Metadata
+# Correcoes no Pipeline: Botao Gerar Copy, Encurtador de Links e Prompts da IA
 
-## Contexto
+## Resumo
 
-O backend de scraping foi atualizado e agora envia dados adicionais na coluna `metadata` (JSONB) da tabela `raw_scrapes`, incluindo `categoria`, `is_buy_box` e `validade_fim`. Atualmente o metadata so contem `source_id`. As alteracoes abaixo preparam a interface para os novos campos.
+Tres correcoes a aplicar: mover o botao "Gerar Copy" para a aba correta, integrar o encurtador de links no modal de geracao, e restringir rigorosamente o tamanho dos textos gerados pela IA.
 
 ## Alteracoes
 
-### 1. Atualizar a interface RawScrape (Pipeline.tsx)
+### 1. Mover o Botao "Gerar Copy" da aba "Novos Achados" para "Revisao e IA"
 
-Adicionar o campo `metadata` ao tipo `RawScrape`:
+**Ficheiro: `src/pages/Pipeline.tsx`**
+
+- **Remover** o botao "Gerar Copy" dos cartoes da aba "Novos Achados" (linhas 415-417).
+- **Adicionar** um botao "Gerar Copy" em cada cartao da aba "Revisao e IA", ao lado dos botoes "Regenerar" e "Copiar" (linha ~491).
+- Adaptar o estado `copyModalProduct` para aceitar dados de uma `Promotion` (a aba de revisao usa o tipo `Promotion`, nao `RawScrape`). O `GenerateCopyModal` ja aceita um `ProductData` generico, bastando mapear os campos da `Promotion` para esse formato ao abrir o modal.
+
+### 2. Integrar o Encurtador de Links no GenerateCopyModal
+
+**Ficheiro: `src/components/pipeline/GenerateCopyModal.tsx`**
+
+- Antes de chamar a Edge Function `generate-promo-message`, invocar `shortenLink()` para obter a URL curta do produto.
+- Passar a `shortUrl` como `original_url` no body da chamada a IA, em vez da URL longa original.
+- Importar `shortenLink` de `@/lib/link-shortener`.
+- Tratar o caso de erro do encurtador com um toast informativo.
+
+### 3. Ajustar o Prompt do "Modo Padrao" (Edge Function)
+
+**Ficheiro: `supabase/functions/generate-promo-message/index.ts`**
+
+Substituir o conteudo da funcao `buildDefaultPrompt()` pelo seguinte prompt estrito:
 
 ```text
-metadata: {
-  categoria?: string;
-  is_buy_box?: boolean;
-  validade_fim?: string;
-  source_id?: string;
-  [key: string]: unknown;
-} | null;
+Voce atua no WhatsApp. E ESTRITAMENTE PROIBIDO usar introducoes, saudacoes, bullet points, descricoes de funcionalidades ou emojis nao solicitados. O seu texto final deve ter no MAXIMO 5 linhas. Siga este formato exato e nao adicione NADA a mais:
+
+[Emoji de medalha baseado no desconto] [CRIE UMA FRASE ENGRAÇADA, IRÔNICA E CURTA SOBRE O PRODUTO EM CAIXA ALTA]
+
+[Nome original do produto em Title Case]
+
+[Preco e parcelamento. Ex: por R$ 43,55 no PIX]
+[Link Encurtado que foi fornecido]
 ```
 
-### 2. Atualizar os Cartoes de Produto (aba "Novos Achados")
+### 4. Ajustar o Prompt do "Modo Personalizado" (Edge Function)
 
-Dentro do `CardContent` de cada produto, adicionar:
+**Ficheiro: `supabase/functions/generate-promo-message/index.ts`**
 
-- **Badge de Categoria**: Se `s.metadata?.categoria` existir, mostrar uma `Badge` com o texto da categoria.
-- **Selo Open Box**: Se `s.metadata?.is_buy_box === true`, mostrar uma `Badge` vermelha/laranja com "Open Box / Reembalado".
-- **Validade da Promocao**: Se `s.metadata?.validade_fim` existir, mostrar um texto com icone de relogio "Valido ate: DD/MM/AAAA HH:mm" usando `format` do `date-fns`.
-- **Rating e Installments**: Remover `line-clamp` do rating e garantir que `installments` tenha espaco para textos longos (usar `text-xs` com `break-words`).
+Adicionar a seguinte regra ao final do prompt retornado por `buildCustomPrompt()`:
 
-### 3. Novos Filtros (ScrapeFilters.tsx)
-
-Adicionar dois novos filtros ao componente `ScrapeFilters`:
-
-- **Filtro de Categoria**: Um `Select` que recebe a lista de categorias unicas extraidas dos scrapes (calculadas no `Pipeline.tsx` via `useMemo`). Permite filtrar por uma categoria especifica.
-- **Filtro "Ocultar Open Box"**: Um `Checkbox` com label "Ocultar Open Box" que, quando ativo, remove itens onde `metadata?.is_buy_box === true`.
-
-### 4. Logica de Filtragem (Pipeline.tsx)
-
-No `useMemo` de `filteredScrapes`, adicionar:
-
-- Filtragem por `filterCategory` (novo estado string, default `"all"`).
-- Filtragem por `hideOpenBox` (novo estado boolean, default `false`).
-- Calculo de categorias unicas: `useMemo` que extrai todas as `metadata?.categoria` distintas dos scrapes.
+```text
+REGRA DE COMPRIMENTO: O texto deve ser curto, direto ao ponto para WhatsApp (maximo de 6 linhas). Nunca use formato de lista ou descricoes longas.
+```
 
 ## Detalhes Tecnicos
 
 ### Ficheiros a alterar
 
 **`src/pages/Pipeline.tsx`**:
-- Adicionar `metadata` ao tipo `RawScrape`
-- Importar `format` de `date-fns` e `Clock` de `lucide-react`
-- Adicionar estados `filterCategory` (string) e `hideOpenBox` (boolean)
-- Calcular `uniqueCategories` via `useMemo`
-- Aplicar novos filtros no `filteredScrapes`
-- Atualizar JSX dos cartoes com badges de categoria, selo Open Box, e validade
-- Passar novos props ao `ScrapeFilters`
+- Remover linhas 415-417 (botao "Gerar Copy" na aba "Novos Achados")
+- Na aba "Revisao e IA" (linha ~491), adicionar botao que abre o `GenerateCopyModal` mapeando os campos da `Promotion` para o formato `ProductData`
+- Ajustar o tipo de `copyModalProduct` para suportar dados vindos de `Promotion`
 
-**`src/components/pipeline/ScrapeFilters.tsx`**:
-- Adicionar props: `filterCategory`, `onFilterCategoryChange`, `categories` (string[]), `hideOpenBox`, `onHideOpenBoxChange`
-- Adicionar Select de categorias e Checkbox "Ocultar Open Box"
-- Incluir novos filtros na logica de `hasFilters` e `clearFilters`
+**`src/components/pipeline/GenerateCopyModal.tsx`**:
+- Importar `shortenLink` de `@/lib/link-shortener`
+- No `handleGenerate`, antes da chamada a edge function, encurtar `product.original_url` via `shortenLink()`
+- Usar a URL curta resultante como `original_url` no body enviado a IA
 
-### Tratamento de metadata nulo
-
-Todo o acesso ao metadata usa optional chaining (`s.metadata?.categoria`), garantindo compatibilidade com produtos antigos que tenham metadata nulo ou sem os novos campos.
+**`supabase/functions/generate-promo-message/index.ts`**:
+- Reescrever `buildDefaultPrompt()` com o prompt estrito de 5 linhas fornecido pelo utilizador
+- Adicionar regra de comprimento maximo (6 linhas) ao final de `buildCustomPrompt()`
 
