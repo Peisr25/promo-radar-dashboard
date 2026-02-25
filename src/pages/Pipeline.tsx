@@ -74,7 +74,7 @@ export default function Pipeline() {
   const [filterPriceRange, setFilterPriceRange] = useState<PriceRangeFilter>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [hideOpenBox, setHideOpenBox] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<"all" | "magalu" | "shopee">("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "magalu" | "shopee" | "amazon">("all");
 
   const fetchAll = async () => {
     const [s, r, q] = await Promise.all([
@@ -374,7 +374,7 @@ export default function Pipeline() {
       <h1 className="text-2xl font-bold">Pipeline de Promoções</h1>
 
       {/* Source filter tabs */}
-      <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "magalu" | "shopee")}>
+      <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "magalu" | "shopee" | "amazon")}>
         <TabsList>
           <TabsTrigger value="all">Todas as Fontes ({scrapes.length})</TabsTrigger>
           <TabsTrigger value="magalu">
@@ -382,6 +382,9 @@ export default function Pipeline() {
           </TabsTrigger>
           <TabsTrigger value="shopee">
             <span className="inline-flex items-center gap-1.5">🟠 Shopee ({scrapes.filter(s => s.source === "shopee").length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="amazon">
+            <span className="inline-flex items-center gap-1.5">📦 Amazon ({scrapes.filter(s => s.source === "amazon").length})</span>
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -446,7 +449,10 @@ export default function Pipeline() {
                       {s.source === "shopee" && (
                         <Badge className="text-xs bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">Shopee</Badge>
                       )}
-                      {s.source && s.source !== "magalu" && s.source !== "shopee" && (
+                      {s.source === "amazon" && (
+                        <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">Amazon</Badge>
+                      )}
+                      {s.source && s.source !== "magalu" && s.source !== "shopee" && s.source !== "amazon" && (
                         <Badge variant="secondary" className="text-xs">{s.source}</Badge>
                       )}
                       {(s.metadata as any)?.categoria && (
