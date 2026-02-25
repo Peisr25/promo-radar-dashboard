@@ -50,7 +50,7 @@ export default function ShortLinks() {
   const avgClicks = links.length > 0 ? (totalClicks / links.length).toFixed(1) : "0";
 
   const copyLink = (code: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/r/${code}`);
+    navigator.clipboard.writeText(`https://radardaspromos.lovable.app/r/${code}`);
     toast({ title: "Link copiado!" });
   };
 

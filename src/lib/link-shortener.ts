@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
+const BASE_URL = "https://radardaspromos.lovable.app";
+
 function generateShortCode(): string {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let code = "";
@@ -29,7 +31,7 @@ export async function shortenLink(params: {
     .maybeSingle();
 
   if (existing) {
-    const shortUrl = `${window.location.origin}/r/${existing.short_code}`;
+    const shortUrl = `${BASE_URL}/r/${existing.short_code}`;
     return { shortCode: existing.short_code, shortUrl };
   }
 
@@ -64,7 +66,7 @@ export async function shortenLink(params: {
     return { shortCode: "", shortUrl: "", error: error.message };
   }
 
-  const shortUrl = `${window.location.origin}/r/${data.short_code}`;
+  const shortUrl = `${BASE_URL}/r/${data.short_code}`;
   return { shortCode: data.short_code, shortUrl };
 }
 
