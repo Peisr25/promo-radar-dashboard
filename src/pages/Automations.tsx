@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bot, Plus, Trash2, Percent, MessageCircle } from "lucide-react";
 import { AutomationRuleModal } from "@/components/automations/AutomationRuleModal";
+import { AutomationActivityLog } from "@/components/automations/AutomationActivityLog";
 
 interface AutomationRule {
   id: string;
@@ -55,6 +56,7 @@ export default function Automations() {
   });
 
   const groupNameMap = new Map(groups?.map((g) => [g.id, g.group_name]) ?? []);
+  const ruleNameMap = new Map(rules?.map((r) => [r.id, r.name]) ?? []);
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
@@ -174,6 +176,15 @@ export default function Automations() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Log de Atividades Recentes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AutomationActivityLog ruleNameMap={ruleNameMap} />
+        </CardContent>
+      </Card>
 
       <AutomationRuleModal
         open={modalOpen}
