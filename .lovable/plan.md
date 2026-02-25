@@ -1,61 +1,54 @@
 
 
-# Auto-Categorizar Produtos da Shopee com IA
+# Integrar Amazon ao Dashboard
 
 ## Resumo
-Criar uma Edge Function `auto-categorize` que usa IA para classificar produtos da Shopee com base no titulo, e adicionar um botao na UI do Pipeline para acionar essa categorizacao em lote.
+Adicionar a Amazon como nova fonte de scraping na pagina Sources e como filtro no Pipeline, seguindo os padroes ja existentes para Magalu e Shopee.
 
 ## Alteracoes
 
-### 1. Nova Edge Function: `supabase/functions/auto-categorize/index.ts`
+### 1. Sources.tsx -- Card da Amazon
 
-- Recebe um array de objetos `{ id: number, product_title: string }`.
-- Usa o Lovable AI Gateway (`google/gemini-3-flash-preview`) com `LOVABLE_API_KEY` (ja configurado).
-- System prompt instrui a IA a classificar cada produto em UMA das categorias: Smartphones, Eletrodomesticos, TV e Video, Informatica, Eletroportateis, Casa e Moveis, Beleza e Perfumaria, Moda, Outros.
-- Para eficiencia, envia todos os titulos num unico prompt em formato de lista numerada e pede resposta no mesmo formato (uma categoria por linha).
-- Faz parse da resposta e executa UPDATE na tabela `raw_scrapes` para cada produto, atualizando `metadata` com a categoria via `jsonb_set` ou merge de JSONB.
-- Usa `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (ambos ja configurados como secrets) para criar um client Supabase com permissoes de servico e contornar RLS.
-- Trata erros 429/402 do gateway de IA.
+Adicionar um novo Card estatico (similar ao da Shopee mas mais simples, sem credenciais) entre o card da Shopee e a tabela de fontes genericas.
 
-### 2. Configuracao: `supabase/config.toml`
+- Icone: `Package` (lucide) ou reutilizar `ShoppingBag`
+- Titulo: "Amazon"
+- Badge: sempre "Pronto" (nao precisa de configuracao)
+- Descricao: "Motor de busca da Amazon. Sincronize para importar produtos."
+- Botao "Sincronizar" que faz POST para `start-scrape` com body `{ site_name: "amazon", source_id: "amazon_api_source" }`
+- Estado `amazonSyncing` para controlar loading do botao
 
-Adicionar entrada para a nova funcao:
+### 2. Pipeline.tsx -- Aba Amazon no filtro de fontes
+
+**Tipo do sourceFilter**: Alterar de `"all" | "magalu" | "shopee"` para `"all" | "magalu" | "shopee" | "amazon"` (linha 77).
+
+**Tabs de fonte** (linhas 377-387): Adicionar nova TabsTrigger:
 ```text
-[functions.auto-categorize]
-verify_jwt = false
+<TabsTrigger value="amazon">
+  <span>📦 Amazon ({count})</span>
+</TabsTrigger>
 ```
 
-### 3. UI: Botao na pagina Pipeline (`src/pages/Pipeline.tsx`)
+### 3. Pipeline.tsx -- Badge visual Amazon nos cards de produto
 
-- Adicionar estado `categorizing` (boolean) para controlar loading.
-- Calcular `uncategorizedShopee`: produtos filtrados onde `source === "shopee"` e `metadata.categoria === "Shopee Geral"` (ou sem categoria).
-- Renderizar botao "Auto-Categorizar (IA)" com icone Sparkles, visivel apenas quando `sourceFilter === "shopee"` ou `sourceFilter === "all"`, e habilitado apenas se `uncategorizedShopee.length > 0`.
-- Ao clicar: exibir toast "Categorizando produtos...", chamar `supabase.functions.invoke("auto-categorize", { body: { products } })`, e apos sucesso fazer `fetchAll()` para atualizar a UI.
-- Colocar o botao ao lado do botao "Apagar Todos" na aba "Novos Achados".
+Nas linhas 443-451, adicionar condicao para `source === "amazon"`:
+```text
+{s.source === "amazon" && (
+  <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">Amazon</Badge>
+)}
+```
+
+Atualizar a condicao de fallback (linha 449) para excluir tambem "amazon":
+```text
+{s.source && s.source !== "magalu" && s.source !== "shopee" && s.source !== "amazon" && (
+```
 
 ## Ficheiros alterados
 
 | Ficheiro | Alteracao |
 |---|---|
-| `supabase/functions/auto-categorize/index.ts` | Novo ficheiro -- Edge Function de categorizacao em lote |
-| `supabase/config.toml` | Adicionar `[functions.auto-categorize]` com `verify_jwt = false` |
-| `src/pages/Pipeline.tsx` | Estado `categorizing`, calculo de produtos nao categorizados, botao com handler |
+| `src/pages/Sources.tsx` | Novo card Amazon com botao Sincronizar + estado `amazonSyncing` |
+| `src/pages/Pipeline.tsx` | Tipo sourceFilter expandido, nova aba Amazon, badge amber nos cards |
 
-## Detalhes tecnicos da Edge Function
-
-A estrategia de prompt em lote envia todos os titulos de uma vez para minimizar chamadas a IA:
-
-```text
-System: "Classifica cada produto numa das categorias: [lista]. Responde APENAS com o numero e a categoria, uma por linha. Ex: 1. Smartphones"
-User: "1. Samsung Galaxy A15...\n2. Fritadeira Eletrica...\n3. ..."
-```
-
-O parse da resposta extrai linhas no formato `N. Categoria` e mapeia de volta aos IDs dos produtos. Categorias nao reconhecidas sao classificadas como "Outros".
-
-O UPDATE usa o client Supabase com service role para fazer merge do campo `metadata`:
-```typescript
-await supabase.from("raw_scrapes").update({
-  metadata: { ...existingMetadata, categoria: newCategory }
-}).eq("id", productId);
-```
+Nao sao necessarias alteracoes na Edge Function `start-scrape` -- ela ja suporta o fluxo generico com `site_name` + `source_id`.
 
