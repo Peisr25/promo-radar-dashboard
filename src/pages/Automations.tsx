@@ -8,9 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2, Square } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2, Square, Settings2, Clock, AlertTriangle, CheckCircle } from "lucide-react";
 import { AutomationRuleModal } from "@/components/automations/AutomationRuleModal";
 import { AutomationActivityLog } from "@/components/automations/AutomationActivityLog";
+
+const ALL_CATEGORIES_TOKEN = "__all__";
 
 interface AutomationRule {
   id: string;
@@ -24,25 +27,39 @@ interface AutomationRule {
   created_at: string;
 }
 
+interface MotorControl {
+  id: string;
+  is_running: boolean;
+  max_messages_per_hour: number | null;
+  max_messages_per_day: number | null;
+  last_run_at: string | null;
+  last_run_sent: number | null;
+  last_run_errors: number | null;
+  last_run_skipped: number | null;
+}
+
 export default function Automations() {
   const { session } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [limitPerHour, setLimitPerHour] = useState("");
+  const [limitPerDay, setLimitPerDay] = useState("");
 
-  // Query motor_control to know if engine is running
+  // Query motor_control to know if engine is running + settings
   const { data: motorControl } = useQuery({
     queryKey: ["motor_control"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("motor_control")
-        .select("is_running")
+        .select("*")
         .maybeSingle();
       if (error) throw error;
-      return data as { is_running: boolean } | null;
+      return data as MotorControl | null;
     },
     enabled: !!session,
-    refetchInterval: 3000, // poll every 3s while page is open
+    refetchInterval: 3000,
   });
 
   const isMotorRunning = motorControl?.is_running ?? false;
@@ -158,8 +175,59 @@ export default function Automations() {
     }
   };
 
+  const saveLimitsMutation = useMutation({
+    mutationFn: async () => {
+      const perHour = limitPerHour ? parseInt(limitPerHour, 10) : 0;
+      const perDay = limitPerDay ? parseInt(limitPerDay, 10) : 0;
+
+      const { data: existing } = await supabase
+        .from("motor_control")
+        .select("id")
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase.from("motor_control").update({
+          max_messages_per_hour: perHour,
+          max_messages_per_day: perDay,
+        }).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("motor_control").insert({
+          user_id: session!.user.id,
+          max_messages_per_hour: perHour,
+          max_messages_per_day: perDay,
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["motor_control"] });
+      toast({ title: "Limites atualizados!" });
+      setSettingsOpen(false);
+    },
+    onError: () => toast({ title: "Erro ao salvar limites", variant: "destructive" }),
+  });
+
+  const handleOpenSettings = () => {
+    setLimitPerHour(String(motorControl?.max_messages_per_hour ?? 0));
+    setLimitPerDay(String(motorControl?.max_messages_per_day ?? 0));
+    setSettingsOpen(!settingsOpen);
+  };
+
   const modeLabel = (mode: string) =>
     mode === "urubu_padrao" ? "🦅 Modo Urubu" : "🎯 Personalizado";
+
+  const formatLastRun = (dateStr: string | null) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMin = Math.round((now.getTime() - date.getTime()) / 60000);
+    if (diffMin < 1) return "Agora mesmo";
+    if (diffMin < 60) return `Há ${diffMin} min`;
+    const diffHours = Math.round(diffMin / 60);
+    if (diffHours < 24) return `Há ${diffHours}h`;
+    return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  };
 
   return (
     <div className="space-y-6">
@@ -171,6 +239,14 @@ export default function Automations() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenSettings}
+            title="Configurações do Motor"
+          >
+            <Settings2 className="h-4 w-4" />
+          </Button>
           {isMotorRunning || runEngineMutation.isPending ? (
             <Button
               variant="destructive"
@@ -199,6 +275,99 @@ export default function Automations() {
           </Button>
         </div>
       </div>
+
+      {/* Motor Settings Panel */}
+      {settingsOpen && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Settings2 className="h-4 w-4" />
+              Configurações do Motor
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Limite por Hora</label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="0 = sem limite"
+                  value={limitPerHour}
+                  onChange={(e) => setLimitPerHour(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Máx. de mensagens enviadas por hora. 0 = ilimitado.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Limite por Dia</label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="0 = sem limite"
+                  value={limitPerDay}
+                  onChange={(e) => setLimitPerDay(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Máx. de mensagens enviadas por dia. 0 = ilimitado.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => saveLimitsMutation.mutate()}
+                disabled={saveLimitsMutation.isPending}
+              >
+                {saveLimitsMutation.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                Salvar Limites
+              </Button>
+              {motorControl?.max_messages_per_hour || motorControl?.max_messages_per_day ? (
+                <span className="text-xs text-muted-foreground">
+                  Atual: {motorControl.max_messages_per_hour || "∞"}/h, {motorControl.max_messages_per_day || "∞"}/dia
+                </span>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Last Run Summary */}
+      {motorControl?.last_run_at && (
+        <Card>
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-4 text-sm flex-wrap">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                Última execução: {formatLastRun(motorControl.last_run_at)}
+              </span>
+              {motorControl.last_run_sent != null && motorControl.last_run_sent > 0 && (
+                <span className="flex items-center gap-1 text-green-600">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {motorControl.last_run_sent} enviado(s)
+                </span>
+              )}
+              {motorControl.last_run_skipped != null && motorControl.last_run_skipped > 0 && (
+                <span className="flex items-center gap-1 text-yellow-600">
+                  {motorControl.last_run_skipped} ignorado(s)
+                </span>
+              )}
+              {motorControl.last_run_errors != null && motorControl.last_run_errors > 0 && (
+                <span className="flex items-center gap-1 text-destructive">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {motorControl.last_run_errors} erro(s)
+                </span>
+              )}
+              {(motorControl.max_messages_per_hour || motorControl.max_messages_per_day) ? (
+                <Badge variant="outline" className="text-xs">
+                  Limites: {motorControl.max_messages_per_hour || "∞"}/h, {motorControl.max_messages_per_day || "∞"}/dia
+                </Badge>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading && (
         <div className="grid gap-4 md:grid-cols-2">
@@ -238,11 +407,17 @@ export default function Automations() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-1.5">
-                {rule.categories.map((cat) => (
-                  <Badge key={cat} variant="secondary" className="text-xs">
-                    {cat}
+                {rule.categories.includes(ALL_CATEGORIES_TOKEN) ? (
+                  <Badge variant="default" className="text-xs">
+                    Todas as Categorias
                   </Badge>
-                ))}
+                ) : (
+                  rule.categories.map((cat) => (
+                    <Badge key={cat} variant="secondary" className="text-xs">
+                      {cat}
+                    </Badge>
+                  ))
+                )}
               </div>
 
               <div className="flex items-center gap-4 text-sm text-muted-foreground">

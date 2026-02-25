@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           id: string
           message: string
+          metadata: Json | null
           rule_id: string | null
           scrape_id: number | null
           status: string
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           id?: string
           message: string
+          metadata?: Json | null
           rule_id?: string | null
           scrape_id?: number | null
           status?: string
@@ -37,6 +39,7 @@ export type Database = {
           created_at?: string
           id?: string
           message?: string
+          metadata?: Json | null
           rule_id?: string | null
           scrape_id?: number | null
           status?: string
@@ -172,18 +175,36 @@ export type Database = {
         Row: {
           id: string
           is_running: boolean
+          last_run_at: string | null
+          last_run_errors: number | null
+          last_run_sent: number | null
+          last_run_skipped: number | null
+          max_messages_per_day: number | null
+          max_messages_per_hour: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
           id?: string
           is_running?: boolean
+          last_run_at?: string | null
+          last_run_errors?: number | null
+          last_run_sent?: number | null
+          last_run_skipped?: number | null
+          max_messages_per_day?: number | null
+          max_messages_per_hour?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
           id?: string
           is_running?: boolean
+          last_run_at?: string | null
+          last_run_errors?: number | null
+          last_run_sent?: number | null
+          last_run_skipped?: number | null
+          max_messages_per_day?: number | null
+          max_messages_per_hour?: number | null
           updated_at?: string
           user_id?: string
         }

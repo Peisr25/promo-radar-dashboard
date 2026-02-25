@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 
+const ALL_CATEGORIES_TOKEN = "__all__";
+
 const formSchema = z.object({
   name: z.string().min(1, "Nome obrigatório").max(100),
   categories: z.array(z.string()).min(1, "Selecione ao menos 1 categoria"),
@@ -145,9 +147,18 @@ export function AutomationRuleModal({ open, onOpenChange }: AutomationRuleModalP
 
   const selectedCategories = form.watch("categories");
   const aiMode = form.watch("ai_mode");
+  const isAllCategories = selectedCategories.includes(ALL_CATEGORIES_TOKEN);
+
+  const toggleAllCategories = () => {
+    if (isAllCategories) {
+      form.setValue("categories", [], { shouldValidate: true });
+    } else {
+      form.setValue("categories", [ALL_CATEGORIES_TOKEN], { shouldValidate: true });
+    }
+  };
 
   const toggleCategory = (cat: string) => {
-    const current = form.getValues("categories");
+    const current = form.getValues("categories").filter((c) => c !== ALL_CATEGORIES_TOKEN);
     form.setValue(
       "categories",
       current.includes(cat) ? current.filter((c) => c !== cat) : [...current, cat],
@@ -189,22 +200,38 @@ export function AutomationRuleModal({ open, onOpenChange }: AutomationRuleModalP
               render={() => (
                 <FormItem>
                   <FormLabel>Categorias</FormLabel>
-                  <div className="flex flex-wrap gap-2 rounded-md border border-input p-3 min-h-[44px]">
-                    {categories && categories.length > 0 ? (
-                      categories.map((cat) => (
-                        <Badge
-                          key={cat}
-                          variant={selectedCategories.includes(cat) ? "default" : "outline"}
-                          className="cursor-pointer select-none"
-                          onClick={() => toggleCategory(cat)}
-                        >
-                          {cat}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        Nenhuma categoria encontrada
-                      </span>
+                  <div className="space-y-2">
+                    <Badge
+                      variant={isAllCategories ? "default" : "outline"}
+                      className="cursor-pointer select-none text-sm px-3 py-1"
+                      onClick={toggleAllCategories}
+                    >
+                      Todas as Categorias
+                    </Badge>
+                    {!isAllCategories && (
+                      <div className="flex flex-wrap gap-2 rounded-md border border-input p-3 min-h-[44px]">
+                        {categories && categories.length > 0 ? (
+                          categories.map((cat) => (
+                            <Badge
+                              key={cat}
+                              variant={selectedCategories.includes(cat) ? "default" : "outline"}
+                              className="cursor-pointer select-none"
+                              onClick={() => toggleCategory(cat)}
+                            >
+                              {cat}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            Nenhuma categoria encontrada
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {isAllCategories && (
+                      <p className="text-xs text-muted-foreground">
+                        A regra vai processar produtos de qualquer categoria.
+                      </p>
                     )}
                   </div>
                   <FormMessage />

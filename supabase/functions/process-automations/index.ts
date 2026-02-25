@@ -6,11 +6,13 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const ALL_CATEGORIES_TOKEN = "__all__";
+
 function parseDiscount(raw: string | null): number {
   if (!raw) return 0;
   const cleaned = raw.replace(/[^0-9.,]/g, "").replace(",", ".");
   const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : num;
+  return isNaN(num) ? 0 : Math.min(num, 100);
 }
 
 function generateShortCode(): string {
@@ -33,6 +35,7 @@ Deno.serve(async (req) => {
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
   let userId: string | null = null;
+  const startTime = Date.now();
 
   try {
     // Auth
@@ -48,23 +51,42 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Try getClaims first, fall back to getUser for broader compatibility
+    let extractedUserId: string | null = null;
+    try {
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData, error: claimsError } = await (userClient.auth as any).getClaims(token);
+      if (!claimsError && claimsData?.claims) {
+        extractedUserId = claimsData.claims.sub as string;
+      }
+    } catch {
+      // getClaims not available, try getUser
     }
-    userId = claimsData.claims.sub as string;
 
-    // Upsert motor_control to is_running = true
+    if (!extractedUserId) {
+      const { data: userData, error: userError } = await userClient.auth.getUser();
+      if (userError || !userData?.user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      extractedUserId = userData.user.id;
+    }
+
+    userId = extractedUserId;
+
+    // Fetch motor_control settings (limits etc.)
     const { data: existingCtrl } = await admin
       .from("motor_control")
-      .select("id")
+      .select("*")
       .eq("user_id", userId)
       .maybeSingle();
 
+    const maxPerHour = existingCtrl?.max_messages_per_hour ?? 0;
+    const maxPerDay = existingCtrl?.max_messages_per_day ?? 0;
+
+    // Upsert motor_control to is_running = true
     if (existingCtrl) {
       await admin.from("motor_control").update({ is_running: true, updated_at: new Date().toISOString() }).eq("user_id", userId);
     } else {
@@ -84,9 +106,23 @@ Deno.serve(async (req) => {
     const scrapes = scrapesRes.data ?? [];
 
     if (rules.length === 0 || scrapes.length === 0) {
-      await admin.from("motor_control").update({ is_running: false, updated_at: new Date().toISOString() }).eq("user_id", userId);
+      const noDataMsg = rules.length === 0 ? "Nenhuma regra ativa." : "Nenhum scrape pendente.";
+      await admin.from("automation_logs").insert({
+        user_id: userId,
+        status: "skipped",
+        message: `Motor iniciado: ${noDataMsg}`,
+        metadata: { type: "motor_start", rules: rules.length, scrapes: scrapes.length },
+      });
+      await admin.from("motor_control").update({
+        is_running: false,
+        updated_at: new Date().toISOString(),
+        last_run_at: new Date().toISOString(),
+        last_run_sent: 0,
+        last_run_errors: 0,
+        last_run_skipped: scrapes.length,
+      }).eq("user_id", userId);
       return new Response(
-        JSON.stringify({ processed: scrapes.length, sent: 0, errors: 0, skipped: scrapes.length, message: rules.length === 0 ? "Nenhuma regra ativa." : "Nenhum scrape pendente." }),
+        JSON.stringify({ processed: scrapes.length, sent: 0, errors: 0, skipped: scrapes.length, message: noDataMsg }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -99,9 +135,53 @@ Deno.serve(async (req) => {
       .in("id", groupUuids);
     const groupMap = new Map((groupRows ?? []).map((g) => [g.id, g]));
 
+    // Check rate limits — count messages sent in the last hour and today
+    let sentLastHour = 0;
+    let sentToday = 0;
+
+    if (maxPerHour > 0 || maxPerDay > 0) {
+      const now = new Date();
+      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+      if (maxPerHour > 0) {
+        const { count } = await admin
+          .from("whatsapp_messages_log")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("status", "sent")
+          .gte("created_at", oneHourAgo);
+        sentLastHour = count ?? 0;
+      }
+
+      if (maxPerDay > 0) {
+        const { count } = await admin
+          .from("whatsapp_messages_log")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("status", "sent")
+          .gte("created_at", todayStart);
+        sentToday = count ?? 0;
+      }
+    }
+
+    // Log motor start
+    await admin.from("automation_logs").insert({
+      user_id: userId,
+      status: "processing",
+      message: `Motor iniciado: ${scrapes.length} produtos pendentes, ${rules.length} regra(s) ativa(s)`,
+      metadata: {
+        type: "motor_start",
+        rules: rules.length,
+        scrapes: scrapes.length,
+        limits: { maxPerHour, maxPerDay, sentLastHour, sentToday },
+      },
+    });
+
     let sent = 0;
     let errors = 0;
     let skipped = 0;
+    let rateLimited = false;
 
     // Phase 2 & 3 — Match & Execute
     for (const scrape of scrapes) {
@@ -117,6 +197,30 @@ Deno.serve(async (req) => {
           user_id: userId,
           status: "skipped",
           message: "Motor pausado pelo utilizador.",
+          metadata: { type: "motor_paused", processed_so_far: sent + errors + skipped },
+        });
+        break;
+      }
+
+      // Rate limit check
+      if (maxPerHour > 0 && (sentLastHour + sent) >= maxPerHour) {
+        rateLimited = true;
+        await admin.from("automation_logs").insert({
+          user_id: userId,
+          status: "skipped",
+          message: `Limite por hora atingido (${maxPerHour}/h). Motor pausado automaticamente.`,
+          metadata: { type: "rate_limit", limit_type: "hourly", limit: maxPerHour, current: sentLastHour + sent },
+        });
+        break;
+      }
+
+      if (maxPerDay > 0 && (sentToday + sent) >= maxPerDay) {
+        rateLimited = true;
+        await admin.from("automation_logs").insert({
+          user_id: userId,
+          status: "skipped",
+          message: `Limite diário atingido (${maxPerDay}/dia). Motor pausado automaticamente.`,
+          metadata: { type: "rate_limit", limit_type: "daily", limit: maxPerDay, current: sentToday + sent },
         });
         break;
       }
@@ -126,10 +230,12 @@ Deno.serve(async (req) => {
       const discount = parseDiscount(scrape.discount_percentage);
       const title = scrape.product_title ?? "Sem título";
 
-      // Find first matching rule
-      const matchedRule = rules.find(
-        (rule) => rule.categories.includes(categoria) && discount >= Number(rule.min_discount)
-      );
+      // Find first matching rule — supports __all__ token for "all categories"
+      const matchedRule = rules.find((rule) => {
+        const categoryMatch =
+          rule.categories.includes(ALL_CATEGORIES_TOKEN) || rule.categories.includes(categoria);
+        return categoryMatch && discount >= Number(rule.min_discount);
+      });
 
       if (!matchedRule) {
         await admin.from("raw_scrapes").update({ status: "skipped" }).eq("id", scrape.id);
@@ -137,19 +243,27 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Descriptive processing log
+      // Descriptive processing log with metadata
       const { data: logRow } = await admin.from("automation_logs").insert({
         rule_id: matchedRule.id,
         scrape_id: scrape.id,
         user_id: userId,
         status: "processing",
-        message: `Processando: ${title.substring(0, 50)}... (Desc: ${discount}%)`,
+        message: `Processando: ${title.substring(0, 60)} (${discount}% off)`,
+        metadata: {
+          type: "processing",
+          categoria,
+          discount,
+          price: scrape.price,
+          old_price: scrape.old_price,
+          rule_name: matchedRule.name,
+        },
       }).select("id").single();
       const logId = logRow?.id;
 
       try {
         const group = groupMap.get(matchedRule.target_group_id);
-        if (!group) throw new Error("Grupo de destino não encontrado.");
+        if (!group) throw new Error(`Grupo de destino não encontrado (ID: ${matchedRule.target_group_id}).`);
 
         // Build generate-promo-message payload (WITHOUT original_url)
         const generateBody: Record<string, unknown> = {
@@ -161,7 +275,7 @@ Deno.serve(async (req) => {
           installments: scrape.installments,
           price_type: scrape.price_type,
           is_buy_box: metadata.is_buy_box ?? false,
-          // original_url intentionally omitted
+          // original_url intentionally omitted to prevent AI hallucination
         };
 
         if (matchedRule.ai_mode === "custom" && matchedRule.custom_ai_options) {
@@ -237,11 +351,22 @@ Deno.serve(async (req) => {
           throw new Error(sendData.message ?? "Falha ao enviar para WhatsApp.");
         }
 
-        // Success — update log
+        // Success — update log with rich metadata
         if (logId) {
           await admin.from("automation_logs").update({
             status: "success",
-            message: `Enviado: ${title.substring(0, 40)} -> ${group.group_name}`,
+            message: `Enviado: ${title.substring(0, 50)} -> ${group.group_name}`,
+            metadata: {
+              type: "sent",
+              categoria,
+              discount,
+              price: scrape.price,
+              old_price: scrape.old_price,
+              group_name: group.group_name,
+              rule_name: matchedRule.name,
+              has_image: !!scrape.image_url,
+              has_short_link: !!shortUrl,
+            },
           }).eq("id", logId);
         }
 
@@ -270,17 +395,50 @@ Deno.serve(async (req) => {
         if (logId) {
           await admin.from("automation_logs").update({
             status: "error",
-            message: errorMsg,
+            message: `Erro: ${title.substring(0, 40)} - ${errorMsg.substring(0, 100)}`,
+            metadata: {
+              type: "error",
+              categoria,
+              discount,
+              error_detail: errorMsg,
+              rule_name: matchedRule.name,
+            },
           }).eq("id", logId);
         }
       }
     }
 
-    // Motor finished — set is_running = false
-    await admin.from("motor_control").update({ is_running: false, updated_at: new Date().toISOString() }).eq("user_id", userId);
+    const durationMs = Date.now() - startTime;
+    const durationSec = Math.round(durationMs / 1000);
+
+    // Log motor completion summary
+    await admin.from("automation_logs").insert({
+      user_id: userId,
+      status: sent > 0 ? "success" : "skipped",
+      message: `Motor finalizado em ${durationSec}s: ${sent} enviado(s), ${skipped} ignorado(s), ${errors} erro(s)${rateLimited ? " [LIMITE ATINGIDO]" : ""}`,
+      metadata: {
+        type: "motor_end",
+        sent,
+        errors,
+        skipped,
+        duration_seconds: durationSec,
+        total_processed: scrapes.length,
+        rate_limited: rateLimited,
+      },
+    });
+
+    // Motor finished — update with stats
+    await admin.from("motor_control").update({
+      is_running: false,
+      updated_at: new Date().toISOString(),
+      last_run_at: new Date().toISOString(),
+      last_run_sent: sent,
+      last_run_errors: errors,
+      last_run_skipped: skipped,
+    }).eq("user_id", userId);
 
     return new Response(
-      JSON.stringify({ processed: scrapes.length, sent, errors, skipped }),
+      JSON.stringify({ processed: scrapes.length, sent, errors, skipped, duration_seconds: durationSec, rate_limited: rateLimited }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
@@ -288,6 +446,12 @@ Deno.serve(async (req) => {
     // Ensure motor is stopped on crash
     if (userId) {
       await admin.from("motor_control").update({ is_running: false, updated_at: new Date().toISOString() }).eq("user_id", userId).catch(() => {});
+      await admin.from("automation_logs").insert({
+        user_id: userId,
+        status: "error",
+        message: `Motor crashou: ${e instanceof Error ? e.message : "Erro desconhecido"}`,
+        metadata: { type: "motor_crash", error: e instanceof Error ? e.message : "Erro desconhecido" },
+      }).catch(() => {});
     }
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }),
