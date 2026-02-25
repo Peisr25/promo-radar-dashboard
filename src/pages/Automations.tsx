@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2 } from "lucide-react";
+import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2, Square } from "lucide-react";
 import { AutomationRuleModal } from "@/components/automations/AutomationRuleModal";
 import { AutomationActivityLog } from "@/components/automations/AutomationActivityLog";
 
@@ -29,6 +29,7 @@ export default function Automations() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const { data: rules, isLoading } = useQuery({
     queryKey: ["automation_rules"],
@@ -87,7 +88,16 @@ export default function Automations() {
 
   const runEngineMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("process-automations");
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const { data, error } = await supabase.functions.invoke("process-automations", {
+        body: {},
+        headers: {},
+      });
+      abortRef.current = null;
+      if (controller.signal.aborted) {
+        throw new Error("Execução cancelada pelo utilizador.");
+      }
       if (error) throw error;
       return data as { processed: number; sent: number; errors: number; skipped: number };
     },
@@ -99,13 +109,23 @@ export default function Automations() {
       queryClient.invalidateQueries({ queryKey: ["automation_rules"] });
     },
     onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido";
       toast({
-        title: "Erro ao executar motor",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
-        variant: "destructive",
+        title: msg.includes("cancelada") ? "Execução interrompida" : "Erro ao executar motor",
+        description: msg,
+        variant: msg.includes("cancelada") ? "default" : "destructive",
       });
     },
+    onSettled: () => {
+      abortRef.current = null;
+    },
   });
+
+  const handleStop = () => {
+    abortRef.current?.abort();
+    runEngineMutation.reset();
+    toast({ title: "Solicitação de parada enviada" });
+  };
 
   const modeLabel = (mode: string) =>
     mode === "urubu_padrao" ? "🦅 Modo Urubu" : "🎯 Personalizado";
@@ -120,18 +140,23 @@ export default function Automations() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => runEngineMutation.mutate()}
-            disabled={runEngineMutation.isPending}
-          >
-            {runEngineMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
+          {runEngineMutation.isPending ? (
+            <Button
+              variant="destructive"
+              onClick={handleStop}
+            >
+              <Square className="mr-2 h-4 w-4" />
+              Parar Execução
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => runEngineMutation.mutate()}
+            >
               <Play className="mr-2 h-4 w-4" />
-            )}
-            Executar Motor Agora
-          </Button>
+              Executar Motor Agora
+            </Button>
+          )}
           <Button onClick={() => setModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Nova Automação
