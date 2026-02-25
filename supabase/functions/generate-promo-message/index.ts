@@ -192,7 +192,8 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const message = data.choices?.[0]?.message?.content?.trim() ?? "PROMOÇÃO IMPERDÍVEL";
+    const aiText = data.choices?.[0]?.message?.content?.trim() ?? "PROMOÇÃO IMPERDÍVEL";
+    const message = original_url ? `${aiText}\n\n${original_url}` : aiText;
 
     return new Response(JSON.stringify({ message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
