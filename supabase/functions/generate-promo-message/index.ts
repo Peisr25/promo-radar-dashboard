@@ -26,7 +26,8 @@ REGRAS:
 - Humor brasileiro, memes e referências da cultura pop.
 - Sem palavrões ou linguagem ofensiva.
 - NÃO inclua links ou URLs na resposta. O link será adicionado automaticamente.
-- MÁXIMO 5 linhas no total.`;
+- MÁXIMO 5 linhas no total.
+- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto). Ex: ~R$ 199,90~ por *R$ 99,90* (*50% OFF*).`;
 }
 
 function buildCustomPrompt(options: {
@@ -71,6 +72,7 @@ REGRAS:
 - Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
 - Sem palavrões ou linguagem ofensiva.
 - NÃO inclua links ou URLs na resposta. O link será adicionado automaticamente.
+- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto). Ex: ~R$ 199,90~ por *R$ 99,90* (*50% OFF*).
 
 REGRA DE COMPRIMENTO: O texto deve ser curto, direto ao ponto para WhatsApp (máximo de 6 linhas). Nunca use formato de lista ou descrições longas.`;
 }
