@@ -64,7 +64,7 @@ export default function Pipeline() {
   const [sendingPromotion, setSendingPromotion] = useState<Promotion | null>(null);
   const [sending, setSending] = useState(false);
   const [copyModalOpen, setCopyModalOpen] = useState(false);
-  const [copyModalProduct, setCopyModalProduct] = useState<RawScrape | null>(null);
+  const [copyModalProduct, setCopyModalProduct] = useState<any>(null);
 
   // Filter & sort state
   const [sortBy, setSortBy] = useState<SortOption>("discount");
@@ -412,9 +412,6 @@ export default function Pipeline() {
                         {processing === s.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                         Processar
                       </Button>
-                      <Button variant="outline" onClick={() => { setCopyModalProduct(s); setCopyModalOpen(true); }}>
-                        <MessageCircle className="mr-1 h-4 w-4" /> Gerar Copy
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -488,6 +485,25 @@ export default function Pipeline() {
                             }
                           }}><RefreshCw className="mr-2 h-4 w-4" /> Regenerar</Button>
                           <Button variant="outline" size="sm" onClick={() => copyMessage(p.ai_message ?? "")}><Copy className="mr-2 h-4 w-4" /> Copiar</Button>
+                          <Button variant="outline" size="sm" onClick={() => {
+                            const discount = p.original_price && p.promo_price
+                              ? String(Math.round((1 - p.promo_price / p.original_price) * 100))
+                              : null;
+                            setCopyModalProduct({
+                              id: 0,
+                              product_title: p.product_name,
+                              price: p.promo_price,
+                              old_price: p.original_price,
+                              discount_percentage: discount,
+                              rating: null,
+                              installments: null,
+                              price_type: null,
+                              original_url: p.product_url,
+                              image_url: p.product_image_url,
+                              metadata: null,
+                            });
+                            setCopyModalOpen(true);
+                          }}><MessageCircle className="mr-2 h-4 w-4" /> Gerar Copy</Button>
                           <Button size="sm" onClick={() => moveToQueue(p.id)}><Check className="mr-2 h-4 w-4" /> Aprovar e Enviar para Fila</Button>
                         </div>
                       </div>
