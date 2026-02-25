@@ -32,6 +32,7 @@ interface MotorControl {
   is_running: boolean;
   max_messages_per_hour: number | null;
   max_messages_per_day: number | null;
+  delay_between_messages: number | null;
   last_run_at: string | null;
   last_run_sent: number | null;
   last_run_errors: number | null;
@@ -46,6 +47,7 @@ export default function Automations() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [limitPerHour, setLimitPerHour] = useState("");
   const [limitPerDay, setLimitPerDay] = useState("");
+  const [delayBetween, setDelayBetween] = useState("8");
 
   // Query motor_control to know if engine is running + settings
   const { data: motorControl } = useQuery({
@@ -179,6 +181,7 @@ export default function Automations() {
     mutationFn: async () => {
       const perHour = limitPerHour ? parseInt(limitPerHour, 10) : 0;
       const perDay = limitPerDay ? parseInt(limitPerDay, 10) : 0;
+      const delay = delayBetween ? parseInt(delayBetween, 10) : 8;
 
       const { data: existing } = await supabase
         .from("motor_control")
@@ -189,6 +192,7 @@ export default function Automations() {
         const { error } = await supabase.from("motor_control").update({
           max_messages_per_hour: perHour,
           max_messages_per_day: perDay,
+          delay_between_messages: delay,
         }).eq("id", existing.id);
         if (error) throw error;
       } else {
@@ -196,6 +200,7 @@ export default function Automations() {
           user_id: session!.user.id,
           max_messages_per_hour: perHour,
           max_messages_per_day: perDay,
+          delay_between_messages: delay,
         });
         if (error) throw error;
       }
@@ -211,6 +216,7 @@ export default function Automations() {
   const handleOpenSettings = () => {
     setLimitPerHour(String(motorControl?.max_messages_per_hour ?? 0));
     setLimitPerDay(String(motorControl?.max_messages_per_day ?? 0));
+    setDelayBetween(String(motorControl?.delay_between_messages ?? 8));
     setSettingsOpen(!settingsOpen);
   };
 
@@ -286,7 +292,7 @@ export default function Automations() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Limite por Hora</label>
                 <Input
@@ -313,6 +319,19 @@ export default function Automations() {
                   Máx. de mensagens enviadas por dia. 0 = ilimitado.
                 </p>
               </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Delay entre Mensagens</label>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="8"
+                  value={delayBetween}
+                  onChange={(e) => setDelayBetween(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Segundos entre cada envio (anti-spam).
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -323,11 +342,9 @@ export default function Automations() {
                 {saveLimitsMutation.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                 Salvar Limites
               </Button>
-              {motorControl?.max_messages_per_hour || motorControl?.max_messages_per_day ? (
-                <span className="text-xs text-muted-foreground">
-                  Atual: {motorControl.max_messages_per_hour || "∞"}/h, {motorControl.max_messages_per_day || "∞"}/dia
-                </span>
-              ) : null}
+              <span className="text-xs text-muted-foreground">
+                Atual: {motorControl?.max_messages_per_hour || "∞"}/h, {motorControl?.max_messages_per_day || "∞"}/dia, {motorControl?.delay_between_messages ?? 8}s delay
+              </span>
             </div>
           </CardContent>
         </Card>
