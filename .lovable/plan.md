@@ -1,30 +1,38 @@
 
 
-# Correcao do Dominio nos Links Encurtados
+# Correcao: Links Encurtados Bloqueados para Utilizadores Anonimos
 
 ## Problema
 
-O encurtador de links usa `window.location.origin` para construir a URL curta. Quando voce trabalha no ambiente de preview, o `origin` retorna `https://3dc35a41-...lovableproject.com`, e esse dominio errado fica gravado na mensagem da IA e na base de dados.
+Quando alguem clica num link encurtado (ex: `radardaspromos.lovable.app/r/JIgnEI`), a consulta a tabela `short_links` falha silenciosamente porque a politica RLS so permite leitura ao dono do link (`auth.uid() = user_id`). Como o visitante nao esta autenticado, o Supabase retorna zero resultados, o componente interpreta como erro e redireciona para `/` (que por sua vez redireciona para `/auth`).
 
-O correto seria usar sempre o dominio publicado: `https://radardaspromos.lovable.app`.
+## Diagnostico
+
+- **Roteamento**: Ja esta correto. A rota `/r/:shortCode` esta fora do `DashboardLayout` (que e o auth guard). Nao precisa de alteracao.
+- **Componente Redirect**: Nao usa `useAuth` nem contextos protegidos. Nao precisa de alteracao.
+- **RLS (causa raiz)**: A tabela `short_links` tem apenas a politica "Users manage own links" (ALL, `auth.uid() = user_id`). Utilizadores anonimos nao conseguem fazer SELECT.
+- **click_logs**: Ja tem politica de INSERT publica (`true`). OK.
 
 ## Solucao
 
-Substituir `window.location.origin` por uma constante com o dominio publicado no ficheiro `src/lib/link-shortener.ts`. Em vez de depender do browser, o sistema usara sempre o dominio correto.
+Uma unica alteracao: adicionar uma politica RLS na tabela `short_links` que permita SELECT publico (para o role `anon`), limitado apenas as colunas necessarias para o redirecionamento.
 
-## Detalhes Tecnicos
+### Migracao SQL
 
-### Ficheiro a alterar: `src/lib/link-shortener.ts`
+```sql
+CREATE POLICY "Allow public read for redirection"
+ON public.short_links
+FOR SELECT
+TO anon
+USING (is_active = true);
+```
 
-- Criar uma constante no topo do ficheiro:
-  ```text
-  const BASE_URL = "https://radardaspromos.lovable.app";
-  ```
-- Substituir as duas ocorrencias de `${window.location.origin}/r/` por `${BASE_URL}/r/` (linhas 33 e 56).
+Esta politica permite que qualquer visitante anonimo consulte links ativos. Links desativados (`is_active = false`) continuam inacessiveis.
 
-### Ficheiro a alterar: `src/pages/Pipeline.tsx`
+### Nenhuma alteracao de codigo necessaria
 
-- Verificar se `handleProcess` ou `handleRegenerate` tambem usam `window.location.origin` para construir links. Se sim, aplicar a mesma correcao.
-
-Nenhuma alteracao de base de dados e necessaria. Os links ja salvos com o dominio errado so serao corrigidos ao regenerar a mensagem.
+O roteamento e o componente `Redirect.tsx` ja estao correctamente configurados:
+- Rota `/r/:shortCode` fora do layout protegido
+- Componente sem dependencias de autenticacao
+- `resolveAndTrack()` usa o cliente Supabase anonimo, que funcionara assim que a politica RLS for aplicada
 
