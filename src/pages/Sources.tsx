@@ -26,6 +26,9 @@ export default function Sources() {
   const [form, setForm] = useState({ name: "", url: "", site_name: "", scrape_interval_minutes: 60 });
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
+  // Amazon state
+  const [amazonSyncing, setAmazonSyncing] = useState(false);
+
   // Shopee state
   const [shopeeConfigured, setShopeeConfigured] = useState(false);
   const [shopeeConfigOpen, setShopeeConfigOpen] = useState(false);
@@ -227,6 +230,53 @@ export default function Sources() {
         <h1 className="text-2xl font-bold">Fontes de Scraping</h1>
         <Button onClick={openNew}><Plus className="mr-2 h-4 w-4" /> Nova Fonte</Button>
       </div>
+
+      {/* Amazon Card */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <ShoppingBag className="h-5 w-5" />
+            Amazon
+          </CardTitle>
+          <Badge variant="default">Pronto</Badge>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Motor de busca da Amazon. Sincronize para importar produtos.
+          </p>
+          <Button
+            size="sm"
+            onClick={async () => {
+              setAmazonSyncing(true);
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/start-scrape`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${session?.access_token}`,
+                  },
+                  body: JSON.stringify({ site_name: "amazon", source_id: "amazon_api_source" }),
+                });
+                if (res.ok) {
+                  toast({ title: "Sincronização Amazon iniciada", description: "Os produtos aparecerão em breve." });
+                } else {
+                  const err = await res.text();
+                  toast({ title: "Erro ao sincronizar Amazon", description: err, variant: "destructive" });
+                }
+              } catch (e: any) {
+                toast({ title: "Erro ao sincronizar Amazon", description: e.message, variant: "destructive" });
+              } finally {
+                setAmazonSyncing(false);
+              }
+            }}
+            disabled={amazonSyncing}
+          >
+            {amazonSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            Sincronizar
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Shopee Card */}
       <Card>
