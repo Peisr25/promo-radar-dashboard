@@ -60,11 +60,16 @@ serve(async (req) => {
 
       // Forward to Railway
       const res = await fetch(
-        "https://fast-api-scrapers-radar-production.up.railway.app/api/scrape/shopee",
+        "https://fast-api-scrapers-radar-production.up.railway.app/api/start-scrape",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ app_id, app_secret, user_id: user.id }),
+          body: JSON.stringify({
+            source_id: "shopee_api_source",
+            site_name: "shopee",
+            app_id,
+            app_secret,
+          }),
         }
       );
 
