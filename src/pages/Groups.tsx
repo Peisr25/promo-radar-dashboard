@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 function MaterialIcon({ name, className }: { name: string; className?: string }) {
   return <span className={`material-symbols-outlined ${className ?? ""}`}>{name}</span>;
@@ -22,42 +24,71 @@ const groups = [
     members: "12.5k", badge: "TECH", badgeColor: "bg-primary/20 text-primary",
     title: "Tech & Gadgets", desc: "Smartphones, notebooks, fones e periféricos.",
     freq: "Alta", freqIcon: "bolt", status: "Vagas Abertas", statusIcon: "check_circle", statusColor: "text-primary",
-    cta: "Entrar Agora", ctaIcon: "chat",
+    cta: "Entrar Agora", ctaIcon: "chat", category: "Tech",
+    whatsappLink: "https://chat.whatsapp.com/tech-gadgets",
   },
   {
     members: "8.2k", badge: "CASA", badgeColor: "bg-secondary/20 text-secondary",
     title: "Casa & Decoração", desc: "Eletrodomésticos, móveis e utilidades.",
     freq: "Média", freqIcon: "schedule", status: "Vagas Abertas", statusIcon: "check_circle", statusColor: "text-primary",
-    cta: "Entrar Agora", ctaIcon: "chat",
+    cta: "Entrar Agora", ctaIcon: "chat", category: "Casa",
+    whatsappLink: "https://chat.whatsapp.com/casa-decoracao",
   },
   {
     members: "15k", badge: "MODA", badgeColor: "bg-pink-500/20 text-pink-400",
     title: "Moda & Estilo", desc: "Roupas, calçados e acessórios em promoção.",
     freq: "Alta", freqIcon: "bolt", status: "Últimas Vagas", statusIcon: "warning", statusColor: "text-yellow-400",
-    cta: "Entrar Agora", ctaIcon: "chat",
+    cta: "Entrar Agora", ctaIcon: "chat", category: "Moda",
+    whatsappLink: "https://chat.whatsapp.com/moda-estilo",
   },
   {
     members: "6.8k", badge: "GEEK", badgeColor: "bg-secondary/20 text-secondary",
     title: "Mundo Geek", desc: "Jogos, HQs, colecionáveis e cultura pop.",
     freq: "Média", freqIcon: "schedule", status: "Vagas Abertas", statusIcon: "check_circle", statusColor: "text-primary",
-    cta: "Entrar Agora", ctaIcon: "chat",
+    cta: "Entrar Agora", ctaIcon: "chat", category: "Geek",
+    whatsappLink: "https://chat.whatsapp.com/mundo-geek",
   },
   {
     members: "22k", badge: "HOT", badgeColor: "bg-destructive/20 text-destructive",
     title: "Promoções Relâmpago", desc: "Erros de preço, cupons limitados e ofertas rápidas.",
     freq: "Muito Alta", freqIcon: "local_fire_department", status: "Lista de Espera", statusIcon: "lock", statusColor: "text-muted-foreground",
-    cta: "Avisar Vaga", ctaIcon: "notifications_active",
+    cta: "Avisar Vaga", ctaIcon: "notifications_active", category: "Relâmpago",
+    whatsappLink: "",
   },
   {
     members: "5.4k", badge: "KIDS", badgeColor: "bg-primary/20 text-primary",
     title: "Universo Kids", desc: "Brinquedos, fraldas e roupas infantis.",
     freq: "Média", freqIcon: "schedule", status: "Vagas Abertas", statusIcon: "check_circle", statusColor: "text-primary",
-    cta: "Entrar Agora", ctaIcon: "chat",
+    cta: "Entrar Agora", ctaIcon: "chat", category: "Kids",
+    whatsappLink: "https://chat.whatsapp.com/universo-kids",
   },
 ];
 
 export default function Groups() {
   const navigate = useNavigate();
+  const [activeCategory, setActiveCategory] = useState("Todos");
+  const [email, setEmail] = useState("");
+
+  const filteredGroups = activeCategory === "Todos"
+    ? groups
+    : groups.filter(g => g.category === activeCategory);
+
+  const handleCta = (g: typeof groups[0]) => {
+    if (g.status === "Lista de Espera") {
+      toast.success("Você será avisado quando abrir vaga!");
+    } else {
+      window.open(g.whatsappLink, "_blank");
+    }
+  };
+
+  const handleNewsletter = () => {
+    if (!email || !email.includes("@")) {
+      toast.error("Por favor, insira um e-mail válido.");
+      return;
+    }
+    toast.success("Inscrição realizada com sucesso!");
+    setEmail("");
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
@@ -98,11 +129,12 @@ export default function Groups() {
 
       {/* ─── CATEGORY PILLS ─── */}
       <div className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2 px-4 pb-12">
-        {categories.map((cat, i) => (
+        {categories.map((cat) => (
           <button
             key={cat.label}
+            onClick={() => setActiveCategory(cat.label)}
             className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm transition-colors ${
-              i === 0
+              activeCategory === cat.label
                 ? "bg-secondary text-secondary-foreground"
                 : "border border-border/50 bg-card/40 text-muted-foreground hover:border-secondary/30 hover:text-secondary"
             }`}
@@ -116,7 +148,7 @@ export default function Groups() {
       {/* ─── GROUPS GRID ─── */}
       <section className="mx-auto max-w-6xl px-4 pb-24 sm:px-6">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {groups.map((g) => (
+          {filteredGroups.map((g) => (
             <div key={g.title} className="group flex flex-col rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur transition-colors hover:border-secondary/30">
               <div className="flex items-center justify-between">
                 <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${g.badgeColor}`}>
@@ -144,7 +176,10 @@ export default function Groups() {
                 </span>
               </div>
 
-              <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-secondary/10 py-2.5 text-sm font-medium text-secondary transition-colors hover:bg-secondary/20">
+              <button
+                onClick={() => handleCta(g)}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-secondary/10 py-2.5 text-sm font-medium text-secondary transition-colors hover:bg-secondary/20"
+              >
                 <MaterialIcon name={g.ctaIcon} className="text-base" />
                 {g.cta}
               </button>
@@ -161,8 +196,16 @@ export default function Groups() {
             Temos novos grupos abrindo toda semana. Inscreva-se na nossa newsletter para ser avisado primeiro.
           </p>
           <div className="mt-6 flex gap-3">
-            <Input placeholder="seu@email.com" className="flex-1" />
-            <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90">Me avisar</Button>
+            <Input
+              placeholder="seu@email.com"
+              className="flex-1"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleNewsletter()}
+            />
+            <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90" onClick={handleNewsletter}>
+              Me avisar
+            </Button>
           </div>
         </div>
       </section>
