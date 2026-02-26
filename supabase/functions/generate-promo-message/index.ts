@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -99,7 +100,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const {
+    let {
       product_title, price, old_price, discount_percentage,
       rating, installments, price_type, original_url,
       system_prompt, mode,
@@ -108,7 +109,34 @@ serve(async (req) => {
       highlight_open_box, highlight_urgency, tone, is_buy_box,
       // Scarcity metadata
       target_time, percent_claimed,
+      // Server-side lookup key
+      raw_scrape_id,
     } = body;
+
+    // Normalize empty-ish values
+    const isEmpty = (v: unknown) => !v || v === "" || v === "null" || v === "undefined";
+
+    // Server-side metadata lookup when scarcity data is missing but raw_scrape_id is available
+    if (isEmpty(target_time) && isEmpty(percent_claimed) && raw_scrape_id) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (supabaseUrl && supabaseKey) {
+        const sb = createClient(supabaseUrl, supabaseKey);
+        const { data: rawData } = await sb
+          .from("raw_scrapes")
+          .select("metadata")
+          .eq("id", Number(raw_scrape_id))
+          .maybeSingle();
+        if (rawData?.metadata) {
+          const meta = rawData.metadata as Record<string, unknown>;
+          if (!isEmpty(meta.target_time)) target_time = String(meta.target_time);
+          if (!isEmpty(meta.percent_claimed)) percent_claimed = String(meta.percent_claimed);
+          console.log("Scarcity data recovered from DB:", { target_time, percent_claimed, source: "db_lookup" });
+        }
+      }
+    } else if (!isEmpty(target_time) || !isEmpty(percent_claimed)) {
+      console.log("Scarcity data from payload:", { target_time, percent_claimed, source: "payload" });
+    }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");

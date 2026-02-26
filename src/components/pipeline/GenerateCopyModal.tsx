@@ -23,6 +23,7 @@ interface ProductData {
   price_type: string | null;
   original_url: string | null;
   image_url: string | null;
+  raw_scrape_id?: number;
   metadata: {
     categoria?: string;
     is_buy_box?: boolean;
@@ -110,6 +111,8 @@ export function GenerateCopyModal({ open, onOpenChange, product }: GenerateCopyM
       // Always pass scarcity metadata if available
       if (product.metadata?.target_time) body.target_time = product.metadata.target_time;
       if (product.metadata?.percent_claimed) body.percent_claimed = product.metadata.percent_claimed;
+      // Always pass raw_scrape_id for server-side fallback lookup
+      if (product.raw_scrape_id) body.raw_scrape_id = product.raw_scrape_id;
 
       const { data, error } = await supabase.functions.invoke("generate-promo-message", { body });
 
