@@ -1,68 +1,70 @@
 
 
-## Integrar Shein no Dashboard
+## Atualizar WhatsAppSettings com Edição de Grupos
 
-### 1. Página Sources - Card Shein
+### 1. Modal de Edição de Grupo (novo)
 
-Adicionar um novo Card para a Shein entre o card Amazon e o card Shopee, com estilo escuro (bg-zinc-900 text-white). O botao "Sincronizar" enviara o payload `{ site_name: "shein", source_id: "shein_api_source" }` para a edge function `start-scrape`, seguindo o mesmo padrao do card Amazon.
+Adicionar estado `editGroup` e `editDialogOpen`. Ao clicar no botão de lápis, preencher o estado com os dados do grupo selecionado. O modal conterá:
 
-**Ficheiro:** `src/pages/Sources.tsx`
-- Adicionar estado `sheinSyncing`
-- Adicionar Card com fundo escuro (`className="bg-zinc-900 text-white border-zinc-800"`)
-- Botao Sincronizar com a mesma logica do Amazon mas com payload Shein
+- **Nome e ID** (apenas leitura, exibidos como texto)
+- **Link de Convite** (`invite_link`) - campo Input
+- **Categorias** (`categories`) - lista de Badges clicáveis com as opções: `['Tech', 'Casa', 'Moda', 'Geek', 'Kids', 'Beleza', 'Geral']`. Clicar alterna a seleção (toggle). Badges selecionados ficam com `bg-primary text-primary-foreground`, não selecionados ficam `variant="outline"`.
+- **Apenas Ofertas Relâmpago** (`is_flash_deals_only`) - Switch toggle
+- Botão Salvar que faz `update` no Supabase nos campos `invite_link`, `categories`, `is_flash_deals_only` e recarrega a lista
 
-### 2. Pipeline - Filtro de Fonte Shein
+### 2. Nova coluna "Nichos" na tabela
 
-Adicionar a tab "Shein" aos filtros de fonte no topo do Pipeline.
+- Adicionar `<TableHead>Nichos</TableHead>` entre "Último Envio" e "Status"
+- Na célula, mapear `g.categories` como pequenos Badges (`variant="secondary"`, tamanho pequeno)
+- Se `g.is_flash_deals_only` for true, mostrar um Badge vermelho com icone de raio ao lado do nome do grupo na primeira coluna
 
-**Ficheiro:** `src/pages/Pipeline.tsx`
+### 3. Botão Editar na tabela
 
-- Linha 81: Expandir o tipo do `sourceFilter` para incluir `"shein"`
-- Linha 401-414: Adicionar nova `TabsTrigger` para Shein com emoji preto/escuro
-- Linha 469-481: Adicionar bloco de Badge para `s.source === "shein"` com estilo escuro (`bg-zinc-900 text-white border-zinc-700`)
+- Adicionar icone `Pencil` (de lucide-react) como botão ghost ao lado do botão Trash2 existente
+- Ao clicar, abre o modal de edição preenchido com os dados do grupo
 
-### 3. Pipeline - Badges de Prova Social Shein nos Cards
+### 4. Modal Adicionar - campo invite_link
 
-Quando um produto for da Shein e possuir metadados especificos, mostrar badges adicionais.
+- Expandir o estado `newGroup` para incluir `invite_link: ""`
+- Adicionar campo Input "Link de Convite (opcional)" no modal de adição existente
 
-**Ficheiro:** `src/pages/Pipeline.tsx` (dentro do bloco de renderizacao dos cards, apos linha 489)
+### Detalhes técnicos
 
-- Se `s.metadata?.rank_info` existir: mostrar Badge dourado (`bg-amber-500/20 text-amber-400 border-amber-500/30`) com o texto do ranking (ex: "🏆 #3 Mais Vendido em Calcados")
-- Se `s.metadata?.shein_rating` existir: mostrar a nota inline (ex: "star 4.9") junto com `shein_reviews` se disponivel
+**Ficheiro:** `src/pages/WhatsAppSettings.tsx`
 
-### 4. Edge Function - Injecao de Prova Social
+**Novos imports:** `Pencil, Zap` de lucide-react, `Switch` de `@/components/ui/switch`
 
-Atualizar a edge function `generate-promo-message` para injetar contexto de prova social quando o produto for da Shein.
-
-**Ficheiro:** `supabase/functions/generate-promo-message/index.ts`
-
-Apos o bloco de recuperacao de escassez (linha ~130), adicionar logica:
-- Verificar se `source === "shein"` no payload (adicionar campo `source` ao body)
-- Se existir `metadata.rank_info` ou `metadata.shein_rating >= 4.8`, construir uma instrucao de prova social
-- Injetar no prompt e no user content, seguindo o mesmo padrao da instrucao de escassez
-
-Texto da instrucao:
+**Novos estados:**
 ```text
-Este produto e um sucesso de vendas na Shein. O metadata indica que ele e: {rank_info} e possui uma nota de {shein_rating} com {shein_reviews} avaliacoes. Inclua no texto promocional um gatilho de aprovacao popular forte (ex: "Selo de Mais Vendido", "Quase 5 estrelas em milhares de avaliacoes!").
+const [editDialogOpen, setEditDialogOpen] = useState(false);
+const [editGroup, setEditGroup] = useState<any>(null);
 ```
 
-### 5. Pipeline - Passar source na chamada de IA
+**Constante de categorias:**
+```text
+const CATEGORY_OPTIONS = ['Tech', 'Casa', 'Moda', 'Geek', 'Kids', 'Beleza', 'Geral'];
+```
 
-Para que a edge function saiba que o produto e da Shein, passar o campo `source` e os metadados relevantes na chamada `generateMessage` / `processPromotion`.
+**Função saveEditGroup:**
+- Faz `supabase.from("whatsapp_groups").update({ categories, invite_link, is_flash_deals_only }).eq("id", editGroup.id)`
+- Fecha o modal e recarrega a lista
 
-**Ficheiro:** `src/pages/Pipeline.tsx` (funcao `processPromotion`, linha ~297)
-- Adicionar `source: scrape.source` ao payload
-- Adicionar `metadata: scrape.metadata` ao payload para que a edge function possa ler `rank_info`, `shein_rating`, `shein_reviews`
+**Função toggleCategory (dentro do modal de edição):**
+- Se a categoria já está no array, remove. Senão, adiciona.
 
-**Ficheiro:** `supabase/functions/generate-promo-message/index.ts`
-- Extrair `source` e `metadata` do body
-- Usar estes campos na logica de prova social
+**Tabela - coluna Nome (linha 244):**
+- Mostrar Badge vermelho com Zap se `g.is_flash_deals_only`
 
-### Resumo de ficheiros afetados
+**Tabela - nova coluna Nichos (após Último Envio):**
+- Mapear `(g.categories || []).map(c => <Badge variant="secondary" ...>{c}</Badge>)`
 
-| Ficheiro | Alteracao |
-|---|---|
-| `src/pages/Sources.tsx` | Card Shein com sync |
-| `src/pages/Pipeline.tsx` | Tab Shein, badge fonte, badges prova social, payload IA |
-| `supabase/functions/generate-promo-message/index.ts` | Injecao de prova social Shein |
+**Tabela - coluna de ações (linha 255-258):**
+- Adicionar botão Pencil antes do Trash2
+
+**Modal Adicionar (linhas 200-216):**
+- Adicionar campo `invite_link` ao `newGroup` state e ao formulário
+
+**Modal Editar (novo Dialog):**
+- Renderizado fora da tabela, controlado por `editDialogOpen`
+- Campos: nome/ID (read-only), invite_link (Input), categories (Badges clicáveis), is_flash_deals_only (Switch)
 
