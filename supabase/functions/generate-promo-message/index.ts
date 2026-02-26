@@ -111,6 +111,8 @@ serve(async (req) => {
       target_time, percent_claimed,
       // Server-side lookup key
       raw_scrape_id,
+      // Source & metadata for social proof
+      source, metadata,
     } = body;
 
     // Normalize empty-ish values
@@ -136,6 +138,30 @@ serve(async (req) => {
       }
     } else if (!isEmpty(target_time) || !isEmpty(percent_claimed)) {
       console.log("Scarcity data from payload:", { target_time, percent_claimed, source: "payload" });
+    }
+
+    // Shein social proof injection
+    let socialProofInstruction = "";
+    let socialProofUserContext = "";
+    const meta = metadata as Record<string, unknown> | null;
+    if (source === "shein" && meta) {
+      const rankInfo = meta.rank_info as string | undefined;
+      const sheinRating = parseFloat(String(meta.shein_rating ?? "0"));
+      const sheinReviews = meta.shein_reviews as string | undefined;
+
+      if (rankInfo || sheinRating >= 4.8) {
+        socialProofInstruction = `\n\n⚠️ PROVA SOCIAL OBRIGATÓRIA: Este produto é um sucesso de vendas na Shein.`;
+        if (rankInfo) socialProofInstruction += ` O metadata indica que ele é: ${rankInfo}.`;
+        if (sheinRating > 0) socialProofInstruction += ` Possui uma nota de ${sheinRating}`;
+        if (sheinReviews) socialProofInstruction += ` com ${sheinReviews} avaliações`;
+        socialProofInstruction += `. Inclua no texto promocional um gatilho de aprovação popular forte (ex: "Selo de Mais Vendido", "Quase 5 estrelas em milhares de avaliações!").`;
+
+        socialProofUserContext = `\n\n🏆 PROVA SOCIAL SHEIN:`;
+        if (rankInfo) socialProofUserContext += `\n- Ranking: ${rankInfo}`;
+        if (sheinRating > 0) socialProofUserContext += `\n- Nota: ${sheinRating}`;
+        if (sheinReviews) socialProofUserContext += `\n- Avaliações: ${sheinReviews}`;
+        console.log("Shein social proof injected:", { rankInfo, sheinRating, sheinReviews });
+      }
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -192,14 +218,17 @@ serve(async (req) => {
       scarcityUserContext += `\nINCLUA OBRIGATORIAMENTE um parágrafo isolado de urgência com estes dados na mensagem.`;
     }
 
-    // Append scarcity to chosen prompt
+    // Append scarcity + social proof to chosen prompt
     chosenPrompt += scarcityInstruction;
+    chosenPrompt += socialProofInstruction;
 
     if (mode !== "custom") {
       userContent += scarcityUserContext;
+      userContent += socialProofUserContext;
       userContent += `\n\nCrie a mensagem seguindo a estrutura indicada:`;
     } else {
       userContent += scarcityUserContext;
+      userContent += socialProofUserContext;
       userContent += `\n\nCrie a mensagem promocional:`;
     }
 
