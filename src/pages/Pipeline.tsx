@@ -149,20 +149,28 @@ export default function Pipeline() {
     return [...new Set(cats)].sort();
   }, [scrapes]);
 
-  const uncategorizedShopee = useMemo(() => {
+  const isGenericCategory = (source: string | null, categoria?: string) => {
+    if (!categoria) return true;
+    if (source === "shopee" && categoria === "Shopee Geral") return true;
+    // Amazon categories are in English with underscores (e.g. "electronics_accessories")
+    if (source === "amazon" && /^[a-z0-9_]+$/i.test(categoria)) return true;
+    return false;
+  };
+
+  const uncategorizedProducts = useMemo(() => {
     return scrapes.filter(s =>
-      s.source === "shopee" &&
-      (!s.metadata?.categoria || s.metadata.categoria === "Shopee Geral")
+      (s.source === "shopee" || s.source === "amazon") &&
+      isGenericCategory(s.source, s.metadata?.categoria ?? s.metadata?.amazon_category)
     );
   }, [scrapes]);
 
   const handleAutoCategorize = async () => {
-    if (uncategorizedShopee.length === 0) return;
+    if (uncategorizedProducts.length === 0) return;
     setCategorizing(true);
-    toast({ title: "✨ Categorizando produtos...", description: `${uncategorizedShopee.length} produtos a categorizar com IA.` });
+    toast({ title: "✨ Categorizando produtos...", description: `${uncategorizedProducts.length} produtos a categorizar com IA.` });
 
     try {
-      const products = uncategorizedShopee.map(s => ({
+      const products = uncategorizedProducts.map(s => ({
         id: s.id,
         product_title: s.product_title ?? "Sem título",
       }));
@@ -407,10 +415,10 @@ export default function Pipeline() {
 
         <TabsContent value="new">
           <div className="flex justify-end gap-2 mb-2">
-            {uncategorizedShopee.length > 0 && (sourceFilter === "shopee" || sourceFilter === "all") && (
+            {uncategorizedProducts.length > 0 && (sourceFilter === "shopee" || sourceFilter === "amazon" || sourceFilter === "all") && (
               <Button variant="secondary" size="sm" onClick={handleAutoCategorize} disabled={categorizing}>
                 {categorizing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
-                Auto-Categorizar ({uncategorizedShopee.length})
+                Auto-Categorizar ({uncategorizedProducts.length})
               </Button>
             )}
             <Button variant="destructive" size="sm" onClick={deleteAllScrapes} disabled={scrapes.length === 0}>

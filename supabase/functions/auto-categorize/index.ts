@@ -125,7 +125,11 @@ Não adicione nenhum texto extra, explicação ou formatação adicional.`;
         .single();
 
       const existingMeta = (existing?.metadata as Record<string, unknown>) ?? {};
-      const newMeta = { ...existingMeta, categoria: category };
+      const newMeta: Record<string, unknown> = { ...existingMeta, categoria: category };
+      // Also update amazon_category if it exists (Amazon products use this field for display)
+      if (existingMeta.amazon_category !== undefined) {
+        newMeta.amazon_category = category;
+      }
 
       const { error } = await supabase
         .from("raw_scrapes")
