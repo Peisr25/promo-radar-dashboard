@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import PublicFooter from "@/components/PublicFooter";
 
 function MaterialIcon({ name, className }: { name: string; className?: string }) {
   return <span className={`material-symbols-outlined ${className ?? ""}`}>{name}</span>;
@@ -147,16 +148,7 @@ export default function Institutional() {
         </div>
       </section>
 
-      {/* ─── FOOTER ─── */}
-      <footer className="border-t border-border/50 py-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 sm:flex-row sm:px-6">
-          <div className="flex items-center gap-2">
-            <Radar className="h-4 w-4 text-secondary" />
-            <span className="text-sm font-semibold">Radar das Promos</span>
-          </div>
-          <p className="text-xs text-muted-foreground">© 2024 Radar das Promos. Todos os direitos reservados.</p>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }
