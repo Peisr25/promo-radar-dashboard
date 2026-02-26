@@ -1,44 +1,35 @@
 
-## Correcao do botao Auto-Categorizar para Amazon
 
-### Problema
-A funcao `isGenericCategory` recebe apenas uma string (`categoria`), determinada por `metadata?.categoria ?? s.metadata?.amazon_category`. Como o scraper da Amazon define sempre `metadata.categoria = "Amazon Ofertas"`, o operador `??` nunca chega a avaliar `amazon_category`. A string `"Amazon Ofertas"` tem espaco, falha no regex `/^[a-z0-9_]+$/i`, e o sistema conclui que o produto ja esta categorizado -- escondendo o botao.
+## Tornar a pagina /grupos funcional
 
-### Solucao
-Alterar a funcao `isGenericCategory` para receber o objeto `metadata` inteiro em vez de uma unica string, e ajustar o `useMemo` correspondente.
+### Problemas atuais
+- Os botoes de categoria (pills) nao fazem nada ao clicar - o estado ativo esta fixo no primeiro item (index === 0)
+- Os cards de grupos nao tem uma propriedade de categoria para filtrar
+- Os botoes "Entrar Agora" / "Avisar Vaga" nao tem acao
 
-### Alteracoes
+### Mudancas planejadas
 
-**Arquivo: `src/pages/Pipeline.tsx` (linhas 152-165)**
+**1. Filtro de categorias funcional**
+- Adicionar `useState` para controlar a categoria selecionada (default: "Todos")
+- Adicionar campo `category` a cada grupo no array `groups` mapeando para as categorias existentes (Tech, Casa, Moda, Geek, Kids, Relampago)
+- Ao clicar num pill, atualizar o estado e filtrar os cards exibidos
+- "Todos" mostra todos os grupos
 
-Substituir a funcao e o useMemo por:
+**2. Botoes de acao nos cards**
+- "Entrar Agora" abre um link externo do WhatsApp (placeholder `https://chat.whatsapp.com/...`) em nova aba
+- "Avisar Vaga" (lista de espera) mostra um toast de confirmacao usando sonner
 
-```typescript
-const isGenericCategory = (source: string | null, metadata: any) => {
-  if (!metadata) return true;
-  
-  if (source === "shopee") {
-    return !metadata.categoria || metadata.categoria === "Shopee Geral";
-  }
-  
-  if (source === "amazon") {
-    if (metadata.categoria === "Amazon Ofertas") return true;
-    if (metadata.amazon_category && /^[a-z0-9_]+$/i.test(metadata.amazon_category)) return true;
-  }
-  
-  return false;
-};
-
-const uncategorizedProducts = useMemo(() => {
-  return scrapes.filter(s =>
-    (s.source === "shopee" || s.source === "amazon") &&
-    isGenericCategory(s.source, s.metadata)
-  );
-}, [scrapes]);
-```
+**3. Newsletter funcional**
+- Adicionar validacao basica do email e toast de sucesso ao submeter
 
 ### Detalhes tecnicos
-- A funcao agora avalia `metadata.categoria` e `metadata.amazon_category` separadamente para Amazon
-- Para Shopee, mantem a logica existente (sem categoria ou "Shopee Geral")
-- Para Amazon, trata dois cenarios: categoria generica em portugues ("Amazon Ofertas") e categoria nativa em ingles com underscores
-- Nenhuma outra alteracao necessaria -- a Edge Function `auto-categorize` ja suporta ambas as fontes
+
+Arquivo alterado: `src/pages/Groups.tsx`
+
+- Importar `useState` do React e `toast` do sonner
+- Cada objeto em `groups` recebe `category: string` (ex: "Tech", "Casa", "Moda", "Geek", "Relâmpago", "Kids")
+- Estado: `const [activeCategory, setActiveCategory] = useState("Todos")`
+- Filtragem: `const filtered = activeCategory === "Todos" ? groups : groups.filter(g => g.category === activeCategory)`
+- Pills usam `activeCategory === cat.label` para estilo ativo em vez de `i === 0`
+- Botao CTA: grupos com status "Vagas Abertas" ou "Ultimas Vagas" abrem link WhatsApp; grupos com "Lista de Espera" disparam `toast.success("Voce sera avisado quando abrir vaga!")`
+- Newsletter: estado para email, validacao basica, toast de confirmacao
