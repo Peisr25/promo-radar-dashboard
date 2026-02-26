@@ -3,14 +3,14 @@ import { Radar } from "lucide-react";
 import PublicFooter from "@/components/PublicFooter";
 
 const stores = [
-  { icon: "shopping_cart", name: "amazon" },
-  { icon: "shopping_bag", name: "Shopee" },
-  { icon: "storefront", name: "Magalu" },
-  { icon: "handshake", name: "MercadoLivre" },
-  { icon: "local_mall", name: "Americanas" },
-  { icon: "shopping_cart", name: "amazon" },
-  { icon: "shopping_bag", name: "Shopee" },
-  { icon: "storefront", name: "Magalu" },
+  { icon: "shopping_cart", name: "amazon", color: "text-[#FF9900]" },
+  { icon: "shopping_bag", name: "Shopee", color: "text-orange-500" },
+  { icon: "storefront", name: "Magalu", color: "text-blue-500" },
+  { icon: "handshake", name: "MercadoLivre", color: "text-yellow-500" },
+  { icon: "local_mall", name: "Americanas", color: "text-red-500" },
+  { icon: "shopping_cart", name: "amazon", color: "text-[#FF9900]" },
+  { icon: "shopping_bag", name: "Shopee", color: "text-orange-500" },
+  { icon: "storefront", name: "Magalu", color: "text-blue-500" },
 ];
 
 const channels = [
@@ -149,10 +149,10 @@ export default function LandingPage() {
           <div className="mx-auto mb-6 max-w-7xl px-6 text-center">
             <p className="text-sm uppercase tracking-widest font-medium text-muted-foreground">Monitoramos as maiores lojas do Brasil</p>
           </div>
-          <div className="overflow-hidden whitespace-nowrap opacity-50 transition-opacity duration-500 hover:opacity-100">
+          <div className="overflow-hidden whitespace-nowrap">
             <div className="inline-block animate-[marquee_20s_linear_infinite]">
               {[...stores, ...stores].map((s, i) => (
-                <span key={i} className="mx-8 inline-flex items-center gap-2 grayscale transition-all duration-300 hover:grayscale-0 md:mx-16">
+                <span key={i} className={`mx-8 inline-flex items-center gap-2 grayscale hover:grayscale-0 transition-all duration-300 md:mx-16 ${s.color}`}>
                   <MaterialIcon name={s.icon} className="text-4xl" />
                   <span className="text-2xl font-bold tracking-tighter">{s.name}</span>
                 </span>
@@ -171,7 +171,7 @@ export default function LandingPage() {
 
             <div className="relative grid gap-8 md:grid-cols-3">
               {/* connecting line */}
-              <div className="pointer-events-none absolute left-0 top-[60px] hidden h-px w-full bg-gradient-to-r from-transparent via-secondary/30 to-transparent md:block" />
+              <div className="pointer-events-none absolute left-0 top-10 hidden h-px w-full bg-gradient-to-r from-transparent via-secondary/30 to-transparent md:block" />
 
               {steps.map((step) => (
                 <div key={step.title} className="group relative z-10 flex flex-col items-center text-center">
@@ -211,7 +211,7 @@ export default function LandingPage() {
                   className={`min-w-[340px] snap-start rounded-2xl p-8 flex flex-col gap-6 transition-all ${
                     ch.highlighted
                       ? "relative overflow-hidden border border-secondary/20"
-                      : "border border-border/10 bg-card/5 backdrop-blur hover:border-secondary/40"
+                      : "bg-white/5 backdrop-blur-md border border-white/10 hover:border-secondary/40"
                   }`}
                 >
                   {ch.highlighted && (
