@@ -13,21 +13,26 @@ function getMedal(discount: number): string {
 }
 
 function buildDefaultPrompt(): string {
-  return `Você atua no WhatsApp. É ESTRITAMENTE PROIBIDO usar introduções, saudações, bullet points, descrições de funcionalidades ou emojis não solicitados. O seu texto final deve ter no MÁXIMO 5 linhas. Siga este formato exato e não adicione NADA a mais:
+  return `Você atua no WhatsApp. É ESTRITAMENTE PROIBIDO usar introduções, saudações, bullet points, descrições de funcionalidades ou emojis não solicitados.
 
-[Emoji de medalha baseado no desconto: 🥇 para >=60%, 🥈 para >=40%, 🥉 para o resto] [CRIE UMA FRASE ENGRAÇADA, IRÔNICA E CURTA SOBRE O PRODUTO EM CAIXA ALTA]
+ESTRUTURA OBRIGATÓRIA (cada bloco separado por uma linha em branco):
 
-[Nome original do produto em Title Case]
+BLOCO 1 - GANCHO: [Emoji de medalha baseado no desconto: 🥇 para >=60%, 🥈 para >=40%, 🥉 para o resto] [FRASE ENGRAÇADA, IRÔNICA E CURTA EM CAIXA ALTA]
 
-[Preço e parcelamento. Ex: por R$ 43,55 no PIX]
+BLOCO 2 - TÍTULO: [Nome original do produto em Title Case]
+
+BLOCO 3 - URGÊNCIA (APENAS se indicado no contexto): Um parágrafo ISOLADO dedicado à escassez, usando emojis ⚡ ou ⏳. Se NÃO houver indicação de urgência, OMITA este bloco completamente.
+
+BLOCO 4 - PREÇO: [Preço e parcelamento com formatação WhatsApp. Ex: ~R$ 199,90~ por *R$ 99,90* (*50% OFF*) no PIX]
 
 REGRAS:
 - Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
 - Humor brasileiro, memes e referências da cultura pop.
 - Sem palavrões ou linguagem ofensiva.
 - NÃO inclua links ou URLs na resposta. O link será adicionado automaticamente.
-- MÁXIMO 5 linhas no total.
-- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto). Ex: ~R$ 199,90~ por *R$ 99,90* (*50% OFF*).`;
+- MÁXIMO 5 linhas no total (excluindo linhas em branco de separação).
+- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto).
+- NUNCA misture o texto de urgência/escassez no mesmo parágrafo da frase de humor do gancho. A urgência deve ser SEMPRE um bloco visual separado.`;
 }
 
 function buildCustomPrompt(options: {
@@ -62,19 +67,29 @@ function buildCustomPrompt(options: {
     highlights += `\n- Crie urgência mencionando que há poucas unidades disponíveis.`;
   }
 
-  return `Escreva uma mensagem de WhatsApp para vender o produto abaixo. A estrutura deve ser limpa, focada em conversão, e incluir emojis.
+  return `Escreva uma mensagem de WhatsApp para vender o produto abaixo.
 
 ${highlights ? `Destaques OBRIGATÓRIOS na mensagem:${highlights}` : ""}
 
 O Tom de voz deve ser: ${toneText}.
 
+ESTRUTURA OBRIGATÓRIA (cada bloco separado por uma linha em branco):
+
+BLOCO 1 - GANCHO: Frase criativa chamando atenção, com emojis relevantes.
+
+BLOCO 2 - TÍTULO: Nome do produto de forma limpa.
+
+BLOCO 3 - URGÊNCIA (APENAS se indicado no contexto): Um parágrafo ISOLADO dedicado à escassez, usando emojis ⚡ ou ⏳. Se NÃO houver indicação de urgência, OMITA este bloco completamente.
+
+BLOCO 4 - PREÇO: Bloco de preço com formatação WhatsApp (~antigo~ por *novo*).
+
 REGRAS:
 - Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
 - Sem palavrões ou linguagem ofensiva.
 - NÃO inclua links ou URLs na resposta. O link será adicionado automaticamente.
-- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto). Ex: ~R$ 199,90~ por *R$ 99,90* (*50% OFF*).
-
-REGRA DE COMPRIMENTO: O texto deve ser curto, direto ao ponto para WhatsApp (máximo de 6 linhas). Nunca use formato de lista ou descrições longas.`;
+- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto).
+- NUNCA misture o texto de urgência/escassez no mesmo parágrafo da frase de humor do gancho. A urgência deve ser SEMPRE um bloco visual separado.
+- MÁXIMO 6 linhas (excluindo linhas em branco de separação). Nunca use formato de lista ou descrições longas.`;
 }
 
 serve(async (req) => {
@@ -136,10 +151,10 @@ serve(async (req) => {
     // Inject scarcity context into the prompt
     let scarcityInstruction = "";
     if (target_time || percent_claimed) {
-      scarcityInstruction = `\n\nATENÇÃO - OFERTA RELÂMPAGO! Este produto é uma Oferta Relâmpago!`;
+      scarcityInstruction = `\n\nBLOCO DE URGÊNCIA OBRIGATÓRIO: Este produto é uma Oferta Relâmpago! Crie um parágrafo ISOLADO (separado por linhas em branco antes e depois) dedicado APENAS à escassez.`;
       if (target_time) scarcityInstruction += ` O tempo está a acabar (termina em: ${target_time}).`;
       if (percent_claimed) scarcityInstruction += ` Já há muitas unidades vendidas (${percent_claimed}).`;
-      scarcityInstruction += ` Injeta um FORTE gatilho de escassez e urgência no texto (ex: "CORRE QUE ESTÁ A ACABAR!", "Últimas unidades!", "Oferta Relâmpago!").`;
+      scarcityInstruction += ` Use emojis ⚡ ou ⏳. Exemplo: '⚡ OFERTA RELÂMPAGO: Já temos 84% vendido, corre que tá acabando!'. NUNCA misture este texto com a frase de humor do gancho.`;
     }
 
     // Append scarcity to chosen prompt
