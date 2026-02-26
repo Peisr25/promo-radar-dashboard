@@ -18,6 +18,7 @@ import Redirect from "@/pages/Redirect";
 import LandingPage from "@/pages/LandingPage";
 import Institutional from "@/pages/Institutional";
 import Groups from "@/pages/Groups";
+import HowItWorks from "@/pages/HowItWorks";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/" element={<LandingPage />} />
             <Route path="/institucional" element={<Institutional />} />
             <Route path="/grupos" element={<Groups />} />
+            <Route path="/como-funciona" element={<HowItWorks />} />
             <Route path="/admin/auth" element={<AuthRoute />} />
             <Route path="/admin" element={<DashboardLayout />}>
               <Route index element={<Dashboard />} />

@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import PublicFooter from "@/components/PublicFooter";
 
 const stores = [
   { icon: "shopping_cart", name: "amazon" },
@@ -113,7 +114,7 @@ export default function LandingPage() {
               Entrar no Grupo VIP
               <MaterialIcon name="arrow_forward" className="text-lg" />
             </Button>
-            <Button size="lg" variant="ghost" className="gap-2 text-muted-foreground hover:text-foreground">
+            <Button size="lg" variant="ghost" className="gap-2 text-muted-foreground hover:text-foreground" onClick={() => navigate("/como-funciona")}>
               <MaterialIcon name="play_circle" className="text-lg" />
               Como funciona a IA
             </Button>
@@ -235,19 +236,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── FOOTER ─── */}
-      <footer className="border-t border-border/50 py-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 sm:flex-row sm:px-6">
-          <div className="flex items-center gap-2">
-            <Radar className="h-4 w-4 text-secondary" />
-            <span className="text-sm font-semibold">Radar das Promos</span>
-          </div>
-          <div className="flex gap-4 text-xs text-muted-foreground">
-            <button onClick={() => navigate("/institucional")} className="hover:text-foreground transition-colors">Institucional e Termos Legais</button>
-          </div>
-          <p className="text-xs text-muted-foreground">© 2024 Radar Tech. All rights reserved.</p>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

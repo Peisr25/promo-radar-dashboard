@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import PublicFooter from "@/components/PublicFooter";
 
 function MaterialIcon({ name, className }: { name: string; className?: string }) {
   return <span className={`material-symbols-outlined ${className ?? ""}`}>{name}</span>;
@@ -328,20 +329,7 @@ export default function Groups() {
         </div>
       </main>
 
-      {/* ─── FOOTER ─── */}
-      <footer className="border-t border-border/50 py-10 px-4 sm:px-10 mt-auto">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-6 max-w-7xl mx-auto">
-          <div className="flex items-center gap-2">
-            <Radar className="h-5 w-5 text-secondary" />
-            <span className="font-bold">Radar das Promos</span>
-          </div>
-          <div className="flex flex-col md:flex-row items-center gap-4 text-xs text-muted-foreground">
-            <p>Nós não somos associados ao WhatsApp Inc.</p>
-            <span className="hidden md:inline text-muted-foreground/50">•</span>
-            <p>© 2024 Radar das Promos. Todos os direitos reservados.</p>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }
