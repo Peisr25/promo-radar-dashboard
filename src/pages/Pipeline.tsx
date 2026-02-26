@@ -244,6 +244,7 @@ export default function Pipeline() {
     discount_percentage?: string | null; rating?: string | null;
     installments?: string | null; price_type?: string | null; original_url: string;
     target_time?: string; percent_claimed?: string;
+    raw_scrape_id?: number;
   }) => {
     const { data, error } = await supabase.functions.invoke("generate-promo-message", {
       body: productData,
@@ -301,7 +302,8 @@ export default function Pipeline() {
       short_link_code: shortCode,
       ai_message: aiMessage,
       status: "review",
-    });
+      raw_scrape_id: scrape.id,
+    } as any);
     if (!error) {
       await supabase.from("raw_scrapes").update({ status: "processed" }).eq("id", scrape.id);
       toast({ title: "Mensagem gerada com sucesso! 🎉" });
@@ -571,20 +573,6 @@ export default function Pipeline() {
                               ? `https://radardaspromos.lovable.app/r/${p.short_link_code}`
                               : p.product_url ?? "";
 
-                            // Fetch scarcity metadata from original raw_scrape
-                            let targetTime: string | undefined;
-                            let percentClaimed: string | undefined;
-                            if (p.raw_scrape_id) {
-                              const { data: rawData } = await supabase
-                                .from("raw_scrapes")
-                                .select("metadata")
-                                .eq("id", Number(p.raw_scrape_id))
-                                .maybeSingle();
-                              const meta = rawData?.metadata as Record<string, unknown> | null;
-                              targetTime = meta?.target_time as string | undefined;
-                              percentClaimed = meta?.percent_claimed as string | undefined;
-                            }
-
                             const msg = await generateMessage({
                               product_title: p.product_name,
                               price: p.promo_price ?? 0,
@@ -594,8 +582,7 @@ export default function Pipeline() {
                                 : null,
                               price_type: null,
                               original_url: shortUrl,
-                              target_time: targetTime,
-                              percent_claimed: percentClaimed,
+                              raw_scrape_id: (p as any).raw_scrape_id ?? undefined,
                             });
                             if (msg) {
                               setReviewItems((prev) => prev.map((i) => i.id === p.id ? { ...i, ai_message: msg } : i));
@@ -604,21 +591,10 @@ export default function Pipeline() {
                             }
                           }}><RefreshCw className="mr-2 h-4 w-4" /> Regenerar</Button>
                           <Button variant="outline" size="sm" onClick={() => copyMessage(p.ai_message ?? "")}><Copy className="mr-2 h-4 w-4" /> Copiar</Button>
-                          <Button variant="outline" size="sm" onClick={async () => {
+                          <Button variant="outline" size="sm" onClick={() => {
                             const discount = p.original_price && p.promo_price
                               ? String(Math.round((1 - p.promo_price / p.original_price) * 100))
                               : null;
-
-                            // Fetch scarcity metadata from original raw_scrape
-                            let meta: Record<string, unknown> | null = null;
-                            if (p.raw_scrape_id) {
-                              const { data: rawData } = await supabase
-                                .from("raw_scrapes")
-                                .select("metadata")
-                                .eq("id", Number(p.raw_scrape_id))
-                                .maybeSingle();
-                              meta = rawData?.metadata as Record<string, unknown> | null;
-                            }
 
                             setCopyModalProduct({
                               id: 0,
@@ -631,7 +607,8 @@ export default function Pipeline() {
                               price_type: null,
                               original_url: p.product_url,
                               image_url: p.product_image_url,
-                              metadata: meta,
+                              metadata: null,
+                              raw_scrape_id: (p as any).raw_scrape_id ?? undefined,
                             });
                             setCopyModalOpen(true);
                           }}><MessageCircle className="mr-2 h-4 w-4" /> Gerar Copy</Button>

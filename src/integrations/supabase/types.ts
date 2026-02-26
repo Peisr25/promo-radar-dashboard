@@ -223,7 +223,7 @@ export type Database = {
           product_name: string
           product_url: string | null
           promo_price: number | null
-          raw_scrape_id: string | null
+          raw_scrape_id: number | null
           sent_at: string | null
           short_link_code: string | null
           status: string
@@ -240,7 +240,7 @@ export type Database = {
           product_name: string
           product_url?: string | null
           promo_price?: number | null
-          raw_scrape_id?: string | null
+          raw_scrape_id?: number | null
           sent_at?: string | null
           short_link_code?: string | null
           status?: string
@@ -257,7 +257,7 @@ export type Database = {
           product_name?: string
           product_url?: string | null
           promo_price?: number | null
-          raw_scrape_id?: string | null
+          raw_scrape_id?: number | null
           sent_at?: string | null
           short_link_code?: string | null
           status?: string
@@ -265,7 +265,22 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "promotions_raw_scrape_id_fkey"
+            columns: ["raw_scrape_id"]
+            isOneToOne: false
+            referencedRelation: "raw_scrapes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotions_raw_scrape_id_fkey"
+            columns: ["raw_scrape_id"]
+            isOneToOne: false
+            referencedRelation: "vw_raw_scrapes_detailed"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       raw_scrapes: {
         Row: {
