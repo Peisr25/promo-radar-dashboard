@@ -29,6 +29,9 @@ export default function Sources() {
   // Amazon state
   const [amazonSyncing, setAmazonSyncing] = useState(false);
 
+  // Shein state
+  const [sheinSyncing, setSheinSyncing] = useState(false);
+
   // Shopee state
   const [shopeeConfigured, setShopeeConfigured] = useState(false);
   const [shopeeConfigOpen, setShopeeConfigOpen] = useState(false);
@@ -273,6 +276,54 @@ export default function Sources() {
             disabled={amazonSyncing}
           >
             {amazonSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            Sincronizar
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Shein Card */}
+      <Card className="bg-zinc-900 text-white border-zinc-800">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2 text-white">
+            <ShoppingBag className="h-5 w-5" />
+            Shein
+          </CardTitle>
+          <Badge className="bg-zinc-700 text-zinc-100 border-zinc-600">Pronto</Badge>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-zinc-400 mb-4">
+            Motor de busca da Shein. Sincronize para importar produtos com prova social.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              setSheinSyncing(true);
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/start-scrape`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${session?.access_token}`,
+                  },
+                  body: JSON.stringify({ site_name: "shein", source_id: "shein_api_source" }),
+                });
+                if (res.ok) {
+                  toast({ title: "Sincronização Shein iniciada", description: "Os produtos aparecerão em breve." });
+                } else {
+                  const err = await res.text();
+                  toast({ title: "Erro ao sincronizar Shein", description: err, variant: "destructive" });
+                }
+              } catch (e: any) {
+                toast({ title: "Erro ao sincronizar Shein", description: e.message, variant: "destructive" });
+              } finally {
+                setSheinSyncing(false);
+              }
+            }}
+            disabled={sheinSyncing}
+          >
+            {sheinSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Sincronizar
           </Button>
         </CardContent>
