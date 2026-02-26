@@ -38,8 +38,7 @@ const channels = [
     badge: "LIVE",
     title: "Ofertas Relâmpago",
     description: "Erros de preço e promoções de curtíssima duração. Apenas para quem é rápido.",
-    cta: "Acesso Prioritário",
-    ctaIcon: "lock_open",
+    cta: "Entrar no Canal",
   },
 ];
 
@@ -194,9 +193,9 @@ export default function LandingPage() {
               </div>
               <h3 className="text-base font-semibold">{ch.title}</h3>
               <p className="mt-1.5 flex-1 text-sm text-muted-foreground leading-relaxed">{ch.description}</p>
-              <button className="mt-4 flex items-center gap-1.5 text-sm font-medium text-secondary transition-colors hover:text-secondary/80">
+              <button onClick={() => navigate("/grupos")} className="mt-4 flex items-center gap-1.5 text-sm font-medium text-secondary transition-colors hover:text-secondary/80">
                 {ch.cta}
-                <MaterialIcon name={ch.ctaIcon ?? "arrow_forward"} className="text-base" />
+                <MaterialIcon name="arrow_forward" className="text-base" />
               </button>
             </div>
           ))}
