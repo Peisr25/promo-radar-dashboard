@@ -26,6 +26,9 @@ interface ProductData {
   metadata: {
     categoria?: string;
     is_buy_box?: boolean;
+    target_time?: string;
+    percent_claimed?: string;
+    amazon_category?: string;
     [key: string]: unknown;
   } | null;
 }
@@ -103,6 +106,10 @@ export function GenerateCopyModal({ open, onOpenChange, product }: GenerateCopyM
         body.tone = tone;
         body.is_buy_box = product.metadata?.is_buy_box ?? false;
       }
+
+      // Always pass scarcity metadata if available
+      if (product.metadata?.target_time) body.target_time = product.metadata.target_time;
+      if (product.metadata?.percent_claimed) body.percent_claimed = product.metadata.percent_claimed;
 
       const { data, error } = await supabase.functions.invoke("generate-promo-message", { body });
 

@@ -91,6 +91,8 @@ serve(async (req) => {
       // Custom mode fields
       highlight_discount, highlight_installments,
       highlight_open_box, highlight_urgency, tone, is_buy_box,
+      // Scarcity metadata
+      target_time, percent_claimed,
     } = body;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -130,6 +132,18 @@ serve(async (req) => {
     if (price_type) userContent += `\nTipo de pagamento: ${price_type}`;
     if (rating) userContent += `\nAvaliação: ${rating}`;
     // original_url intentionally omitted to prevent AI from hallucinating links
+
+    // Inject scarcity context into the prompt
+    let scarcityInstruction = "";
+    if (target_time || percent_claimed) {
+      scarcityInstruction = `\n\nATENÇÃO - OFERTA RELÂMPAGO! Este produto é uma Oferta Relâmpago!`;
+      if (target_time) scarcityInstruction += ` O tempo está a acabar (termina em: ${target_time}).`;
+      if (percent_claimed) scarcityInstruction += ` Já há muitas unidades vendidas (${percent_claimed}).`;
+      scarcityInstruction += ` Injeta um FORTE gatilho de escassez e urgência no texto (ex: "CORRE QUE ESTÁ A ACABAR!", "Últimas unidades!", "Oferta Relâmpago!").`;
+    }
+
+    // Append scarcity to chosen prompt
+    chosenPrompt += scarcityInstruction;
 
     if (mode !== "custom") {
       userContent += `\n\nCrie a mensagem seguindo a estrutura indicada:`;

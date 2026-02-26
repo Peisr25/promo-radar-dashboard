@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Copy, Check, Send, RefreshCw, Link, MessageCircle, Clock } from "lucide-react";
+import { Loader2, Sparkles, Copy, Check, Send, RefreshCw, Link, MessageCircle, Clock, Timer, Flame } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { shortenLink } from "@/lib/link-shortener";
 import { sendWhatsAppMessage } from "@/lib/evolution-api";
@@ -46,6 +47,9 @@ interface RawScrape {
     is_buy_box?: boolean;
     validade_fim?: string;
     source_id?: string;
+    target_time?: string;
+    percent_claimed?: string;
+    amazon_category?: string;
     [key: string]: unknown;
   } | null;
 }
@@ -239,6 +243,7 @@ export default function Pipeline() {
     product_title: string; price: number; old_price?: number | null;
     discount_percentage?: string | null; rating?: string | null;
     installments?: string | null; price_type?: string | null; original_url: string;
+    target_time?: string; percent_claimed?: string;
   }) => {
     const { data, error } = await supabase.functions.invoke("generate-promo-message", {
       body: productData,
@@ -281,7 +286,9 @@ export default function Pipeline() {
       rating: scrape.rating,
       installments: scrape.installments,
       price_type: scrape.price_type,
-      original_url: shortUrl, // Use short link
+      original_url: shortUrl,
+      target_time: scrape.metadata?.target_time,
+      percent_claimed: scrape.metadata?.percent_claimed,
     });
 
     const { error } = await supabase.from("promotions").insert({
@@ -455,9 +462,11 @@ export default function Pipeline() {
                       {s.source && s.source !== "magalu" && s.source !== "shopee" && s.source !== "amazon" && (
                         <Badge variant="secondary" className="text-xs">{s.source}</Badge>
                       )}
-                      {(s.metadata as any)?.categoria && (
-                        <Badge variant="secondary" className="text-xs">{(s.metadata as any).categoria}</Badge>
-                      )}
+                      {s.metadata?.amazon_category ? (
+                        <Badge variant="secondary" className="text-xs">{s.metadata.amazon_category}</Badge>
+                      ) : s.metadata?.categoria ? (
+                        <Badge variant="secondary" className="text-xs">{s.metadata.categoria}</Badge>
+                      ) : null}
                       {(s.metadata as any)?.is_buy_box === true && (
                         <Badge variant="destructive" className="text-xs">📦 Open Box / Reembalado</Badge>
                       )}
@@ -479,11 +488,26 @@ export default function Pipeline() {
                     {s.installments && (
                       <p className="text-xs text-muted-foreground break-words">{s.installments}</p>
                     )}
-                    {(s.metadata as any)?.validade_fim && (
+                    {s.metadata?.validade_fim && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        Válido até: {format(new Date((s.metadata as any).validade_fim), "dd/MM/yyyy HH:mm")}
+                        Válido até: {format(new Date(s.metadata.validade_fim), "dd/MM/yyyy HH:mm")}
                       </p>
+                    )}
+                    {s.metadata?.target_time && (
+                      <Badge variant="destructive" className="text-xs animate-pulse flex items-center gap-1 w-fit">
+                        <Timer className="h-3 w-3" />
+                        ⚡ Termina em Breve
+                      </Badge>
+                    )}
+                    {s.metadata?.percent_claimed && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold flex items-center gap-1 text-destructive">
+                          <Flame className="h-3 w-3" />
+                          🔥 {s.metadata.percent_claimed} já comprados!
+                        </p>
+                        <Progress value={parseInt(s.metadata.percent_claimed) || 0} className="h-2" />
+                      </div>
                     )}
                     <div className="flex gap-2">
                       <Button className="flex-1" onClick={() => processPromotion(s)} disabled={processing === s.id}>
