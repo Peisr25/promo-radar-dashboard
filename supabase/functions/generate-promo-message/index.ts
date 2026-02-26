@@ -148,21 +148,30 @@ serve(async (req) => {
     if (rating) userContent += `\nAvaliação: ${rating}`;
     // original_url intentionally omitted to prevent AI from hallucinating links
 
-    // Inject scarcity context into the prompt
+    // Inject scarcity context into BOTH prompt and user content
     let scarcityInstruction = "";
+    let scarcityUserContext = "";
     if (target_time || percent_claimed) {
-      scarcityInstruction = `\n\nBLOCO DE URGÊNCIA OBRIGATÓRIO: Este produto é uma Oferta Relâmpago! Crie um parágrafo ISOLADO (separado por linhas em branco antes e depois) dedicado APENAS à escassez.`;
+      scarcityInstruction = `\n\n⚠️ REGRA INVIOLÁVEL - BLOCO DE URGÊNCIA: Este produto é uma Oferta Relâmpago. Você DEVE OBRIGATORIAMENTE incluir o BLOCO 3 (URGÊNCIA) na sua resposta. Este bloco é OBRIGATÓRIO e NÃO PODE ser omitido em NENHUMA circunstância. Crie um parágrafo ISOLADO (separado por linhas em branco antes e depois) dedicado APENAS à escassez.`;
       if (target_time) scarcityInstruction += ` O tempo está a acabar (termina em: ${target_time}).`;
       if (percent_claimed) scarcityInstruction += ` Já há muitas unidades vendidas (${percent_claimed}).`;
-      scarcityInstruction += ` Use emojis ⚡ ou ⏳. Exemplo: '⚡ OFERTA RELÂMPAGO: Já temos 84% vendido, corre que tá acabando!'. NUNCA misture este texto com a frase de humor do gancho.`;
+      scarcityInstruction += ` Use emojis ⚡ ou ⏳. Exemplo: '⚡ OFERTA RELÂMPAGO: Já temos 84% vendido, corre que tá acabando!'. NUNCA misture este texto com a frase de humor do gancho. Se você omitir este bloco, a resposta será REJEITADA.`;
+
+      // Also inject into user content so AI sees it as factual data
+      scarcityUserContext = `\n\n🔴 OFERTA RELÂMPAGO - DADOS DE ESCASSEZ:`;
+      if (percent_claimed) scarcityUserContext += `\n- Unidades vendidas: ${percent_claimed}`;
+      if (target_time) scarcityUserContext += `\n- Termina em: ${target_time}`;
+      scarcityUserContext += `\nINCLUA OBRIGATORIAMENTE um parágrafo isolado de urgência com estes dados na mensagem.`;
     }
 
     // Append scarcity to chosen prompt
     chosenPrompt += scarcityInstruction;
 
     if (mode !== "custom") {
+      userContent += scarcityUserContext;
       userContent += `\n\nCrie a mensagem seguindo a estrutura indicada:`;
     } else {
+      userContent += scarcityUserContext;
       userContent += `\n\nCrie a mensagem promocional:`;
     }
 
