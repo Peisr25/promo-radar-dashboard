@@ -15,6 +15,10 @@ import ShortLinks from "@/pages/ShortLinks";
 import WhatsAppSettings from "@/pages/WhatsAppSettings";
 import Automations from "@/pages/Automations";
 import Redirect from "@/pages/Redirect";
+import LandingPage from "@/pages/LandingPage";
+import Institutional from "@/pages/Institutional";
+import Groups from "@/pages/Groups";
+import HowItWorks from "@/pages/HowItWorks";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,7 +26,7 @@ const queryClient = new QueryClient();
 function AuthRoute() {
   const { session, loading } = useAuth();
   if (loading) return null;
-  if (session) return <Navigate to="/" replace />;
+  if (session) return <Navigate to="/admin" replace />;
   return <Auth />;
 }
 
@@ -34,16 +38,20 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/auth" element={<AuthRoute />} />
-            <Route element={<DashboardLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/sources" element={<Sources />} />
-              <Route path="/pipeline" element={<Pipeline />} />
-              <Route path="/automations" element={<Automations />} />
-              <Route path="/scraper-logs" element={<ScraperLogs />} />
-              <Route path="/links" element={<ShortLinks />} />
-              <Route path="/whatsapp" element={<WhatsAppSettings />} />
-              <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/institucional" element={<Institutional />} />
+            <Route path="/grupos" element={<Groups />} />
+            <Route path="/como-funciona" element={<HowItWorks />} />
+            <Route path="/admin/auth" element={<AuthRoute />} />
+            <Route path="/admin" element={<DashboardLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="sources" element={<Sources />} />
+              <Route path="pipeline" element={<Pipeline />} />
+              <Route path="automations" element={<Automations />} />
+              <Route path="scraper-logs" element={<ScraperLogs />} />
+              <Route path="links" element={<ShortLinks />} />
+              <Route path="whatsapp" element={<WhatsAppSettings />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
             <Route path="/r/:shortCode" element={<Redirect />} />
             <Route path="*" element={<NotFound />} />

@@ -1,54 +1,70 @@
 
 
-# Integrar Amazon ao Dashboard
+## Atualizar WhatsAppSettings com Edição de Grupos
 
-## Resumo
-Adicionar a Amazon como nova fonte de scraping na pagina Sources e como filtro no Pipeline, seguindo os padroes ja existentes para Magalu e Shopee.
+### 1. Modal de Edição de Grupo (novo)
 
-## Alteracoes
+Adicionar estado `editGroup` e `editDialogOpen`. Ao clicar no botão de lápis, preencher o estado com os dados do grupo selecionado. O modal conterá:
 
-### 1. Sources.tsx -- Card da Amazon
+- **Nome e ID** (apenas leitura, exibidos como texto)
+- **Link de Convite** (`invite_link`) - campo Input
+- **Categorias** (`categories`) - lista de Badges clicáveis com as opções: `['Tech', 'Casa', 'Moda', 'Geek', 'Kids', 'Beleza', 'Geral']`. Clicar alterna a seleção (toggle). Badges selecionados ficam com `bg-primary text-primary-foreground`, não selecionados ficam `variant="outline"`.
+- **Apenas Ofertas Relâmpago** (`is_flash_deals_only`) - Switch toggle
+- Botão Salvar que faz `update` no Supabase nos campos `invite_link`, `categories`, `is_flash_deals_only` e recarrega a lista
 
-Adicionar um novo Card estatico (similar ao da Shopee mas mais simples, sem credenciais) entre o card da Shopee e a tabela de fontes genericas.
+### 2. Nova coluna "Nichos" na tabela
 
-- Icone: `Package` (lucide) ou reutilizar `ShoppingBag`
-- Titulo: "Amazon"
-- Badge: sempre "Pronto" (nao precisa de configuracao)
-- Descricao: "Motor de busca da Amazon. Sincronize para importar produtos."
-- Botao "Sincronizar" que faz POST para `start-scrape` com body `{ site_name: "amazon", source_id: "amazon_api_source" }`
-- Estado `amazonSyncing` para controlar loading do botao
+- Adicionar `<TableHead>Nichos</TableHead>` entre "Último Envio" e "Status"
+- Na célula, mapear `g.categories` como pequenos Badges (`variant="secondary"`, tamanho pequeno)
+- Se `g.is_flash_deals_only` for true, mostrar um Badge vermelho com icone de raio ao lado do nome do grupo na primeira coluna
 
-### 2. Pipeline.tsx -- Aba Amazon no filtro de fontes
+### 3. Botão Editar na tabela
 
-**Tipo do sourceFilter**: Alterar de `"all" | "magalu" | "shopee"` para `"all" | "magalu" | "shopee" | "amazon"` (linha 77).
+- Adicionar icone `Pencil` (de lucide-react) como botão ghost ao lado do botão Trash2 existente
+- Ao clicar, abre o modal de edição preenchido com os dados do grupo
 
-**Tabs de fonte** (linhas 377-387): Adicionar nova TabsTrigger:
+### 4. Modal Adicionar - campo invite_link
+
+- Expandir o estado `newGroup` para incluir `invite_link: ""`
+- Adicionar campo Input "Link de Convite (opcional)" no modal de adição existente
+
+### Detalhes técnicos
+
+**Ficheiro:** `src/pages/WhatsAppSettings.tsx`
+
+**Novos imports:** `Pencil, Zap` de lucide-react, `Switch` de `@/components/ui/switch`
+
+**Novos estados:**
 ```text
-<TabsTrigger value="amazon">
-  <span>📦 Amazon ({count})</span>
-</TabsTrigger>
+const [editDialogOpen, setEditDialogOpen] = useState(false);
+const [editGroup, setEditGroup] = useState<any>(null);
 ```
 
-### 3. Pipeline.tsx -- Badge visual Amazon nos cards de produto
-
-Nas linhas 443-451, adicionar condicao para `source === "amazon"`:
+**Constante de categorias:**
 ```text
-{s.source === "amazon" && (
-  <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">Amazon</Badge>
-)}
+const CATEGORY_OPTIONS = ['Tech', 'Casa', 'Moda', 'Geek', 'Kids', 'Beleza', 'Geral'];
 ```
 
-Atualizar a condicao de fallback (linha 449) para excluir tambem "amazon":
-```text
-{s.source && s.source !== "magalu" && s.source !== "shopee" && s.source !== "amazon" && (
-```
+**Função saveEditGroup:**
+- Faz `supabase.from("whatsapp_groups").update({ categories, invite_link, is_flash_deals_only }).eq("id", editGroup.id)`
+- Fecha o modal e recarrega a lista
 
-## Ficheiros alterados
+**Função toggleCategory (dentro do modal de edição):**
+- Se a categoria já está no array, remove. Senão, adiciona.
 
-| Ficheiro | Alteracao |
-|---|---|
-| `src/pages/Sources.tsx` | Novo card Amazon com botao Sincronizar + estado `amazonSyncing` |
-| `src/pages/Pipeline.tsx` | Tipo sourceFilter expandido, nova aba Amazon, badge amber nos cards |
+**Tabela - coluna Nome (linha 244):**
+- Mostrar Badge vermelho com Zap se `g.is_flash_deals_only`
 
-Nao sao necessarias alteracoes na Edge Function `start-scrape` -- ela ja suporta o fluxo generico com `site_name` + `source_id`.
+**Tabela - nova coluna Nichos (após Último Envio):**
+- Mapear `(g.categories || []).map(c => <Badge variant="secondary" ...>{c}</Badge>)`
+
+**Tabela - coluna de ações (linha 255-258):**
+- Adicionar botão Pencil antes do Trash2
+
+**Modal Adicionar (linhas 200-216):**
+- Adicionar campo `invite_link` ao `newGroup` state e ao formulário
+
+**Modal Editar (novo Dialog):**
+- Renderizado fora da tabela, controlado por `editDialogOpen`
+- Campos: nome/ID (read-only), invite_link (Input), categories (Badges clicáveis), is_flash_deals_only (Switch)
 

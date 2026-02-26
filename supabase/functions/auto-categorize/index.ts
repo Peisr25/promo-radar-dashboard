@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const VALID_CATEGORIES = [
+const BASE_CATEGORIES = [
   "Smartphones",
   "Eletrodomésticos",
   "TV e Vídeo",
@@ -18,6 +18,10 @@ const VALID_CATEGORIES = [
   "Moda",
   "Outros",
 ];
+
+// Capitalize first letter of each word for consistent display
+const titleCase = (s: string) =>
+  s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -44,12 +48,15 @@ serve(async (req) => {
       .map((p, i) => `${i + 1}. ${p.product_title}`)
       .join("\n");
 
-    const systemPrompt = `Você é um assistente de e-commerce. Vou te enviar uma lista numerada de títulos de produtos. Para cada um, classifique em APENAS UMA das seguintes categorias: ${VALID_CATEGORIES.join(", ")}.
+    const systemPrompt = `Você é um assistente de e-commerce. Vou te enviar uma lista numerada de títulos de produtos. Para cada um, classifique-o em uma categoria de e-commerce adequada.
+
+Você pode usar estas categorias como base: ${BASE_CATEGORIES.join(", ")}.
+SE nenhuma destas se encaixar perfeitamente (ex: Smartwatches, Fones de Ouvido, Ferramentas, Livros, Brinquedos, etc.), VOCÊ DEVE CRIAR uma nova categoria curta e direta (máximo de 3 palavras).
 
 Responda APENAS com o número e a categoria correspondente, uma por linha. Exemplo:
 1. Smartphones
-2. Eletrodomésticos
-3. Outros
+2. Fones de Ouvido
+3. Ferramentas
 
 Não adicione nenhum texto extra, explicação ou formatação adicional.`;
 
@@ -98,9 +105,7 @@ Não adicione nenhum texto extra, explicação ou formatação adicional.`;
       if (match) {
         const idx = parseInt(match[1]) - 1;
         const rawCat = match[2].trim();
-        const category = VALID_CATEGORIES.find(
-          (c) => c.toLowerCase() === rawCat.toLowerCase()
-        ) ?? "Outros";
+        const category = rawCat.length > 0 ? titleCase(rawCat) : "Outros";
         categoryMap.set(idx, category);
       }
     }
@@ -125,7 +130,11 @@ Não adicione nenhum texto extra, explicação ou formatação adicional.`;
         .single();
 
       const existingMeta = (existing?.metadata as Record<string, unknown>) ?? {};
-      const newMeta = { ...existingMeta, categoria: category };
+      const newMeta: Record<string, unknown> = { ...existingMeta, categoria: category };
+      // Also update amazon_category if it exists (Amazon products use this field for display)
+      if (existingMeta.amazon_category !== undefined) {
+        newMeta.amazon_category = category;
+      }
 
       const { error } = await supabase
         .from("raw_scrapes")

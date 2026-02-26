@@ -31,27 +31,8 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type WhatsAppGroup = Tables<"whatsapp_groups">;
 
-// Available niches/categories for groups
-const AVAILABLE_CATEGORIES = [
-  "Eletrônicos",
-  "Celulares",
-  "Informática",
-  "Games",
-  "Eletrodomésticos",
-  "Moda",
-  "Beleza",
-  "Casa & Decoração",
-  "Esportes",
-  "Automotivo",
-  "Livros",
-  "Brinquedos",
-  "Alimentos",
-  "Saúde",
-  "Ferramentas",
-  "Pet Shop",
-  "Bebê",
-  "Ofertas Gerais",
-];
+// Nichos disponíveis para atribuir aos grupos
+const CATEGORY_OPTIONS = ['Tech', 'Casa', 'Moda', 'Geek', 'Kids', 'Beleza', 'Geral'];
 
 export default function WhatsAppSettings() {
   const { user } = useAuth();
@@ -294,15 +275,11 @@ export default function WhatsAppSettings() {
     toast({ title: "Copiado!" });
   };
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Configurações WhatsApp</h1>
 
-      {/* Connection Config Card */}
+      {/* Evolution API Config Card */}
       <Card>
         <CardHeader>
           <CardTitle>Conexão com Evolution API</CardTitle>
@@ -335,7 +312,7 @@ export default function WhatsAppSettings() {
         </CardContent>
       </Card>
 
-      {/* Groups Management Card */}
+      {/* Groups Card */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -425,8 +402,8 @@ export default function WhatsAppSettings() {
                         <div className="flex items-center gap-1.5">
                           {g.group_name}
                           {g.is_flash_deals_only && (
-                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5 gap-0.5">
-                              <Zap className="h-3 w-3" /> Flash
+                            <Badge variant="destructive" className="text-[10px] px-1 py-0">
+                              <Zap className="h-3 w-3 mr-0.5" /> Flash
                             </Badge>
                           )}
                         </div>
@@ -567,7 +544,7 @@ export default function WhatsAppSettings() {
                   Selecione os nichos que este grupo recebe. Clique para ativar/desativar.
                 </p>
                 <div className="flex flex-wrap gap-2 rounded-md border border-input p-3 min-h-[44px]">
-                  {AVAILABLE_CATEGORIES.map((cat) => (
+                  {CATEGORY_OPTIONS.map((cat) => (
                     <Badge
                       key={cat}
                       variant={editCategories.includes(cat) ? "default" : "outline"}

@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Copy, Check, Send, RefreshCw, Link, MessageCircle, Clock } from "lucide-react";
+import { Loader2, Sparkles, Copy, Check, Send, RefreshCw, Link, MessageCircle, Clock, Timer, Flame } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { shortenLink } from "@/lib/link-shortener";
 import { sendWhatsAppMessage } from "@/lib/evolution-api";
@@ -46,6 +47,9 @@ interface RawScrape {
     is_buy_box?: boolean;
     validade_fim?: string;
     source_id?: string;
+    target_time?: string;
+    percent_claimed?: string;
+    amazon_category?: string;
     [key: string]: unknown;
   } | null;
 }
@@ -74,7 +78,7 @@ export default function Pipeline() {
   const [filterPriceRange, setFilterPriceRange] = useState<PriceRangeFilter>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [hideOpenBox, setHideOpenBox] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<"all" | "magalu" | "shopee" | "amazon">("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "magalu" | "shopee" | "amazon" | "shein">("all");
 
   const fetchAll = async () => {
     const [s, r, q] = await Promise.all([
@@ -145,20 +149,35 @@ export default function Pipeline() {
     return [...new Set(cats)].sort();
   }, [scrapes]);
 
-  const uncategorizedShopee = useMemo(() => {
+  const isGenericCategory = (source: string | null, metadata: any) => {
+    if (!metadata) return true;
+    
+    if (source === "shopee") {
+      return !metadata.categoria || metadata.categoria === "Shopee Geral";
+    }
+    
+    if (source === "amazon") {
+      if (metadata.categoria === "Amazon Ofertas") return true;
+      if (metadata.amazon_category && /^[a-z0-9_]+$/i.test(metadata.amazon_category)) return true;
+    }
+    
+    return false;
+  };
+
+  const uncategorizedProducts = useMemo(() => {
     return scrapes.filter(s =>
-      s.source === "shopee" &&
-      (!s.metadata?.categoria || s.metadata.categoria === "Shopee Geral")
+      (s.source === "shopee" || s.source === "amazon") &&
+      isGenericCategory(s.source, s.metadata)
     );
   }, [scrapes]);
 
   const handleAutoCategorize = async () => {
-    if (uncategorizedShopee.length === 0) return;
+    if (uncategorizedProducts.length === 0) return;
     setCategorizing(true);
-    toast({ title: "✨ Categorizando produtos...", description: `${uncategorizedShopee.length} produtos a categorizar com IA.` });
+    toast({ title: "✨ Categorizando produtos...", description: `${uncategorizedProducts.length} produtos a categorizar com IA.` });
 
     try {
-      const products = uncategorizedShopee.map(s => ({
+      const products = uncategorizedProducts.map(s => ({
         id: s.id,
         product_title: s.product_title ?? "Sem título",
       }));
@@ -239,6 +258,10 @@ export default function Pipeline() {
     product_title: string; price: number; old_price?: number | null;
     discount_percentage?: string | null; rating?: string | null;
     installments?: string | null; price_type?: string | null; original_url: string;
+    target_time?: string; percent_claimed?: string;
+    raw_scrape_id?: number;
+    source?: string | null;
+    metadata?: Record<string, unknown> | null;
   }) => {
     const { data, error } = await supabase.functions.invoke("generate-promo-message", {
       body: productData,
@@ -281,7 +304,11 @@ export default function Pipeline() {
       rating: scrape.rating,
       installments: scrape.installments,
       price_type: scrape.price_type,
-      original_url: shortUrl, // Use short link
+      original_url: shortUrl,
+      target_time: scrape.metadata?.target_time,
+      percent_claimed: scrape.metadata?.percent_claimed,
+      source: scrape.source,
+      metadata: scrape.metadata,
     });
 
     const { error } = await supabase.from("promotions").insert({
@@ -294,7 +321,8 @@ export default function Pipeline() {
       short_link_code: shortCode,
       ai_message: aiMessage,
       status: "review",
-    });
+      raw_scrape_id: scrape.id,
+    } as any);
     if (!error) {
       await supabase.from("raw_scrapes").update({ status: "processed" }).eq("id", scrape.id);
       toast({ title: "Mensagem gerada com sucesso! 🎉" });
@@ -374,7 +402,7 @@ export default function Pipeline() {
       <h1 className="text-2xl font-bold">Pipeline de Promoções</h1>
 
       {/* Source filter tabs */}
-      <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "magalu" | "shopee" | "amazon")}>
+      <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "magalu" | "shopee" | "amazon" | "shein")}>
         <TabsList>
           <TabsTrigger value="all">Todas as Fontes ({scrapes.length})</TabsTrigger>
           <TabsTrigger value="magalu">
@@ -385,6 +413,9 @@ export default function Pipeline() {
           </TabsTrigger>
           <TabsTrigger value="amazon">
             <span className="inline-flex items-center gap-1.5">📦 Amazon ({scrapes.filter(s => s.source === "amazon").length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="shein">
+            <span className="inline-flex items-center gap-1.5">⬛ Shein ({scrapes.filter(s => s.source === "shein").length})</span>
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -398,10 +429,10 @@ export default function Pipeline() {
 
         <TabsContent value="new">
           <div className="flex justify-end gap-2 mb-2">
-            {uncategorizedShopee.length > 0 && (sourceFilter === "shopee" || sourceFilter === "all") && (
+            {uncategorizedProducts.length > 0 && (sourceFilter === "shopee" || sourceFilter === "amazon" || sourceFilter === "all") && (
               <Button variant="secondary" size="sm" onClick={handleAutoCategorize} disabled={categorizing}>
                 {categorizing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
-                Auto-Categorizar ({uncategorizedShopee.length})
+                Auto-Categorizar ({uncategorizedProducts.length})
               </Button>
             )}
             <Button variant="destructive" size="sm" onClick={deleteAllScrapes} disabled={scrapes.length === 0}>
@@ -452,16 +483,32 @@ export default function Pipeline() {
                       {s.source === "amazon" && (
                         <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">Amazon</Badge>
                       )}
-                      {s.source && s.source !== "magalu" && s.source !== "shopee" && s.source !== "amazon" && (
+                      {s.source === "shein" && (
+                        <Badge className="text-xs bg-zinc-900 text-white border-zinc-700 hover:bg-zinc-900">Shein</Badge>
+                      )}
+                      {s.source && s.source !== "magalu" && s.source !== "shopee" && s.source !== "amazon" && s.source !== "shein" && (
                         <Badge variant="secondary" className="text-xs">{s.source}</Badge>
                       )}
-                      {(s.metadata as any)?.categoria && (
-                        <Badge variant="secondary" className="text-xs">{(s.metadata as any).categoria}</Badge>
-                      )}
+                      {s.metadata?.amazon_category ? (
+                        <Badge variant="secondary" className="text-xs">{s.metadata.amazon_category}</Badge>
+                      ) : s.metadata?.categoria ? (
+                        <Badge variant="secondary" className="text-xs">{s.metadata.categoria}</Badge>
+                      ) : null}
                       {(s.metadata as any)?.is_buy_box === true && (
                         <Badge variant="destructive" className="text-xs">📦 Open Box / Reembalado</Badge>
                       )}
+                      {(s.metadata as any)?.rank_info && (
+                        <Badge className="text-xs bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/20">🏆 {(s.metadata as any).rank_info}</Badge>
+                      )}
                     </div>
+                    {(s.metadata as any)?.shein_rating && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        ⭐ {(s.metadata as any).shein_rating}
+                        {(s.metadata as any)?.shein_reviews && (
+                          <span className="text-muted-foreground">({(s.metadata as any).shein_reviews} avaliações)</span>
+                        )}
+                      </p>
+                    )}
                     <h3 className="font-semibold line-clamp-2">{s.product_title ?? "Sem título"}</h3>
                     <div className="flex items-center gap-2 flex-wrap">
                       {s.old_price != null && (
@@ -479,11 +526,26 @@ export default function Pipeline() {
                     {s.installments && (
                       <p className="text-xs text-muted-foreground break-words">{s.installments}</p>
                     )}
-                    {(s.metadata as any)?.validade_fim && (
+                    {s.metadata?.validade_fim && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        Válido até: {format(new Date((s.metadata as any).validade_fim), "dd/MM/yyyy HH:mm")}
+                        Válido até: {format(new Date(s.metadata.validade_fim), "dd/MM/yyyy HH:mm")}
                       </p>
+                    )}
+                    {s.metadata?.target_time && (
+                      <Badge variant="destructive" className="text-xs animate-pulse flex items-center gap-1 w-fit">
+                        <Timer className="h-3 w-3" />
+                        ⚡ Termina em Breve
+                      </Badge>
+                    )}
+                    {s.metadata?.percent_claimed && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold flex items-center gap-1 text-destructive">
+                          <Flame className="h-3 w-3" />
+                          🔥 {s.metadata.percent_claimed} já comprados!
+                        </p>
+                        <Progress value={parseInt(s.metadata.percent_claimed) || 0} className="h-2" />
+                      </div>
                     )}
                     <div className="flex gap-2">
                       <Button className="flex-1" onClick={() => processPromotion(s)} disabled={processing === s.id}>
@@ -546,6 +608,7 @@ export default function Pipeline() {
                             const shortUrl = p.short_link_code
                               ? `https://radardaspromos.lovable.app/r/${p.short_link_code}`
                               : p.product_url ?? "";
+
                             const msg = await generateMessage({
                               product_title: p.product_name,
                               price: p.promo_price ?? 0,
@@ -555,6 +618,7 @@ export default function Pipeline() {
                                 : null,
                               price_type: null,
                               original_url: shortUrl,
+                              raw_scrape_id: (p as any).raw_scrape_id ?? undefined,
                             });
                             if (msg) {
                               setReviewItems((prev) => prev.map((i) => i.id === p.id ? { ...i, ai_message: msg } : i));
@@ -567,6 +631,7 @@ export default function Pipeline() {
                             const discount = p.original_price && p.promo_price
                               ? String(Math.round((1 - p.promo_price / p.original_price) * 100))
                               : null;
+
                             setCopyModalProduct({
                               id: 0,
                               product_title: p.product_name,
@@ -579,6 +644,7 @@ export default function Pipeline() {
                               original_url: p.product_url,
                               image_url: p.product_image_url,
                               metadata: null,
+                              raw_scrape_id: (p as any).raw_scrape_id ?? undefined,
                             });
                             setCopyModalOpen(true);
                           }}><MessageCircle className="mr-2 h-4 w-4" /> Gerar Copy</Button>

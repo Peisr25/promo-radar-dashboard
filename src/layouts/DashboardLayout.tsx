@@ -16,7 +16,7 @@ export default function DashboardLayout() {
   }
 
   if (!session) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/admin/auth" replace />;
   }
 
   return (

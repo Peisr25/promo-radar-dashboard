@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,21 +14,26 @@ function getMedal(discount: number): string {
 }
 
 function buildDefaultPrompt(): string {
-  return `Você atua no WhatsApp. É ESTRITAMENTE PROIBIDO usar introduções, saudações, bullet points, descrições de funcionalidades ou emojis não solicitados. O seu texto final deve ter no MÁXIMO 5 linhas. Siga este formato exato e não adicione NADA a mais:
+  return `Você atua no WhatsApp. É ESTRITAMENTE PROIBIDO usar introduções, saudações, bullet points, descrições de funcionalidades ou emojis não solicitados.
 
-[Emoji de medalha baseado no desconto: 🥇 para >=60%, 🥈 para >=40%, 🥉 para o resto] [CRIE UMA FRASE ENGRAÇADA, IRÔNICA E CURTA SOBRE O PRODUTO EM CAIXA ALTA]
+ESTRUTURA OBRIGATÓRIA (cada bloco separado por uma linha em branco):
 
-[Nome original do produto em Title Case]
+BLOCO 1 - GANCHO: [Emoji de medalha baseado no desconto: 🥇 para >=60%, 🥈 para >=40%, 🥉 para o resto] [FRASE ENGRAÇADA, IRÔNICA E CURTA EM CAIXA ALTA]
 
-[Preço e parcelamento. Ex: por R$ 43,55 no PIX]
+BLOCO 2 - TÍTULO: [Nome original do produto em Title Case]
+
+BLOCO 3 - URGÊNCIA (APENAS se indicado no contexto): Um parágrafo ISOLADO dedicado à escassez, usando emojis ⚡ ou ⏳. Se NÃO houver indicação de urgência, OMITA este bloco completamente.
+
+BLOCO 4 - PREÇO: [Preço e parcelamento com formatação WhatsApp. Ex: ~R$ 199,90~ por *R$ 99,90* (*50% OFF*) no PIX]
 
 REGRAS:
 - Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
 - Humor brasileiro, memes e referências da cultura pop.
 - Sem palavrões ou linguagem ofensiva.
 - NÃO inclua links ou URLs na resposta. O link será adicionado automaticamente.
-- MÁXIMO 5 linhas no total.
-- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto). Ex: ~R$ 199,90~ por *R$ 99,90* (*50% OFF*).`;
+- MÁXIMO 5 linhas no total (excluindo linhas em branco de separação).
+- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto).
+- NUNCA misture o texto de urgência/escassez no mesmo parágrafo da frase de humor do gancho. A urgência deve ser SEMPRE um bloco visual separado.`;
 }
 
 function buildCustomPrompt(options: {
@@ -62,19 +68,29 @@ function buildCustomPrompt(options: {
     highlights += `\n- Crie urgência mencionando que há poucas unidades disponíveis.`;
   }
 
-  return `Escreva uma mensagem de WhatsApp para vender o produto abaixo. A estrutura deve ser limpa, focada em conversão, e incluir emojis.
+  return `Escreva uma mensagem de WhatsApp para vender o produto abaixo.
 
 ${highlights ? `Destaques OBRIGATÓRIOS na mensagem:${highlights}` : ""}
 
 O Tom de voz deve ser: ${toneText}.
 
+ESTRUTURA OBRIGATÓRIA (cada bloco separado por uma linha em branco):
+
+BLOCO 1 - GANCHO: Frase criativa chamando atenção, com emojis relevantes.
+
+BLOCO 2 - TÍTULO: Nome do produto de forma limpa.
+
+BLOCO 3 - URGÊNCIA (APENAS se indicado no contexto): Um parágrafo ISOLADO dedicado à escassez, usando emojis ⚡ ou ⏳. Se NÃO houver indicação de urgência, OMITA este bloco completamente.
+
+BLOCO 4 - PREÇO: Bloco de preço com formatação WhatsApp (~antigo~ por *novo*).
+
 REGRAS:
 - Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
 - Sem palavrões ou linguagem ofensiva.
 - NÃO inclua links ou URLs na resposta. O link será adicionado automaticamente.
-- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto). Ex: ~R$ 199,90~ por *R$ 99,90* (*50% OFF*).
-
-REGRA DE COMPRIMENTO: O texto deve ser curto, direto ao ponto para WhatsApp (máximo de 6 linhas). Nunca use formato de lista ou descrições longas.`;
+- Use formatação WhatsApp: ~texto~ para tachado (preço antigo) e *texto* para negrito (preço novo/desconto).
+- NUNCA misture o texto de urgência/escassez no mesmo parágrafo da frase de humor do gancho. A urgência deve ser SEMPRE um bloco visual separado.
+- MÁXIMO 6 linhas (excluindo linhas em branco de separação). Nunca use formato de lista ou descrições longas.`;
 }
 
 serve(async (req) => {
@@ -84,14 +100,69 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const {
+    let {
       product_title, price, old_price, discount_percentage,
       rating, installments, price_type, original_url,
       system_prompt, mode,
       // Custom mode fields
       highlight_discount, highlight_installments,
       highlight_open_box, highlight_urgency, tone, is_buy_box,
+      // Scarcity metadata
+      target_time, percent_claimed,
+      // Server-side lookup key
+      raw_scrape_id,
+      // Source & metadata for social proof
+      source, metadata,
     } = body;
+
+    // Normalize empty-ish values
+    const isEmpty = (v: unknown) => !v || v === "" || v === "null" || v === "undefined";
+
+    // Server-side metadata lookup when scarcity data is missing but raw_scrape_id is available
+    if (isEmpty(target_time) && isEmpty(percent_claimed) && raw_scrape_id) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (supabaseUrl && supabaseKey) {
+        const sb = createClient(supabaseUrl, supabaseKey);
+        const { data: rawData } = await sb
+          .from("raw_scrapes")
+          .select("metadata")
+          .eq("id", Number(raw_scrape_id))
+          .maybeSingle();
+        if (rawData?.metadata) {
+          const meta = rawData.metadata as Record<string, unknown>;
+          if (!isEmpty(meta.target_time)) target_time = String(meta.target_time);
+          if (!isEmpty(meta.percent_claimed)) percent_claimed = String(meta.percent_claimed);
+          console.log("Scarcity data recovered from DB:", { target_time, percent_claimed, source: "db_lookup" });
+        }
+      }
+    } else if (!isEmpty(target_time) || !isEmpty(percent_claimed)) {
+      console.log("Scarcity data from payload:", { target_time, percent_claimed, source: "payload" });
+    }
+
+    // Shein social proof injection
+    let socialProofInstruction = "";
+    let socialProofUserContext = "";
+    const meta = metadata as Record<string, unknown> | null;
+    if (source === "shein" && meta) {
+      const rankInfo = meta.rank_info as string | undefined;
+      const sheinRating = parseFloat(String(meta.shein_rating ?? "0"));
+      const sheinReviews = meta.shein_reviews as string | undefined;
+
+      if (rankInfo || sheinRating >= 4.8) {
+        socialProofInstruction = `\n\n⚠️ PROVA SOCIAL OBRIGATÓRIA: Este produto é um sucesso de vendas na Shein.`;
+        if (rankInfo) socialProofInstruction += ` O metadata indica que ele é: ${rankInfo}.`;
+        if (sheinRating > 0) socialProofInstruction += ` Possui uma nota de ${sheinRating}`;
+        if (sheinReviews) socialProofInstruction += ` com ${sheinReviews} avaliações`;
+        socialProofInstruction += `. Inclua no texto promocional um gatilho de aprovação popular forte (ex: "Selo de Mais Vendido", "Quase 5 estrelas em milhares de avaliações!").`;
+
+        socialProofUserContext = `\n\n🏆 PROVA SOCIAL SHEIN:`;
+        if (rankInfo) socialProofUserContext += `\n- Ranking: ${rankInfo}`;
+        if (sheinRating > 0) socialProofUserContext += `\n- Nota: ${sheinRating}`;
+        if (sheinReviews) socialProofUserContext += `\n- Avaliações: ${sheinReviews}`;
+        console.log("Shein social proof injected:", { rankInfo, sheinRating, sheinReviews });
+      }
+    }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -131,9 +202,33 @@ serve(async (req) => {
     if (rating) userContent += `\nAvaliação: ${rating}`;
     // original_url intentionally omitted to prevent AI from hallucinating links
 
+    // Inject scarcity context into BOTH prompt and user content
+    let scarcityInstruction = "";
+    let scarcityUserContext = "";
+    if (target_time || percent_claimed) {
+      scarcityInstruction = `\n\n⚠️ REGRA INVIOLÁVEL - BLOCO DE URGÊNCIA: Este produto é uma Oferta Relâmpago. Você DEVE OBRIGATORIAMENTE incluir o BLOCO 3 (URGÊNCIA) na sua resposta. Este bloco é OBRIGATÓRIO e NÃO PODE ser omitido em NENHUMA circunstância. Crie um parágrafo ISOLADO (separado por linhas em branco antes e depois) dedicado APENAS à escassez.`;
+      if (target_time) scarcityInstruction += ` O tempo está a acabar (termina em: ${target_time}).`;
+      if (percent_claimed) scarcityInstruction += ` Já há muitas unidades vendidas (${percent_claimed}).`;
+      scarcityInstruction += ` Use emojis ⚡ ou ⏳. Exemplo: '⚡ OFERTA RELÂMPAGO: Já temos 84% vendido, corre que tá acabando!'. NUNCA misture este texto com a frase de humor do gancho. Se você omitir este bloco, a resposta será REJEITADA.`;
+
+      // Also inject into user content so AI sees it as factual data
+      scarcityUserContext = `\n\n🔴 OFERTA RELÂMPAGO - DADOS DE ESCASSEZ:`;
+      if (percent_claimed) scarcityUserContext += `\n- Unidades vendidas: ${percent_claimed}`;
+      if (target_time) scarcityUserContext += `\n- Termina em: ${target_time}`;
+      scarcityUserContext += `\nINCLUA OBRIGATORIAMENTE um parágrafo isolado de urgência com estes dados na mensagem.`;
+    }
+
+    // Append scarcity + social proof to chosen prompt
+    chosenPrompt += scarcityInstruction;
+    chosenPrompt += socialProofInstruction;
+
     if (mode !== "custom") {
+      userContent += scarcityUserContext;
+      userContent += socialProofUserContext;
       userContent += `\n\nCrie a mensagem seguindo a estrutura indicada:`;
     } else {
+      userContent += scarcityUserContext;
+      userContent += socialProofUserContext;
       userContent += `\n\nCrie a mensagem promocional:`;
     }
 
