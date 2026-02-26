@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CheckCircle, XCircle, Plus, Trash2, RefreshCw } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Plus, Trash2, RefreshCw, Pencil, Zap } from "lucide-react";
 import { testEvolutionConnection, fetchEvolutionGroups } from "@/lib/evolution-api";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -16,6 +17,8 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 
+const CATEGORY_OPTIONS = ['Tech', 'Casa', 'Moda', 'Geek', 'Kids', 'Beleza', 'Geral'];
+
 export default function WhatsAppSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -23,10 +26,12 @@ export default function WhatsAppSettings() {
   const [testing, setTesting] = useState(false);
   const [fetchingGroups, setFetchingGroups] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editGroup, setEditGroup] = useState<any>(null);
   const [config, setConfig] = useState({ api_url: "", api_key: "", session_name: "" });
   const [groups, setGroups] = useState<any[]>([]);
   const [groupLimit, setGroupLimit] = useState(50);
-  const [newGroup, setNewGroup] = useState({ group_id: "", group_name: "", group_description: "" });
+  const [newGroup, setNewGroup] = useState({ group_id: "", group_name: "", group_description: "", invite_link: "" });
 
   useEffect(() => {
     if (user) { loadConfig(); loadGroups(); }
@@ -83,7 +88,6 @@ export default function WhatsAppSettings() {
       toast({ title: "Erro ao buscar grupos", description: result.message, variant: "destructive" });
       return;
     }
-    // Safety: convert object to array if needed
     const groupsArr = Array.isArray(result.groups) ? result.groups : Object.values(result.groups);
     let added = 0;
     for (const g of groupsArr) {
@@ -106,12 +110,15 @@ export default function WhatsAppSettings() {
     if (!user || !newGroup.group_id || !newGroup.group_name) return;
     const { error } = await supabase.from("whatsapp_groups").insert({
       user_id: user.id,
-      ...newGroup,
+      group_id: newGroup.group_id,
+      group_name: newGroup.group_name,
+      group_description: newGroup.group_description || null,
+      invite_link: newGroup.invite_link || null,
     });
     if (error) toast({ title: "Erro ao adicionar", description: error.message, variant: "destructive" });
     else {
       toast({ title: "Grupo adicionado!" });
-      setNewGroup({ group_id: "", group_name: "", group_description: "" });
+      setNewGroup({ group_id: "", group_name: "", group_description: "", invite_link: "" });
       setAddDialogOpen(false);
       loadGroups();
     }
@@ -130,10 +137,46 @@ export default function WhatsAppSettings() {
     else { toast({ title: "Todos os grupos removidos!" }); setGroups([]); }
   };
 
+  const openEditDialog = (group: any) => {
+    setEditGroup({
+      ...group,
+      categories: group.categories || [],
+      invite_link: group.invite_link || "",
+      is_flash_deals_only: group.is_flash_deals_only || false,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const toggleEditCategory = (cat: string) => {
+    if (!editGroup) return;
+    const cats: string[] = editGroup.categories || [];
+    setEditGroup({
+      ...editGroup,
+      categories: cats.includes(cat) ? cats.filter((c: string) => c !== cat) : [...cats, cat],
+    });
+  };
+
+  const saveEditGroup = async () => {
+    if (!editGroup) return;
+    const { error } = await supabase.from("whatsapp_groups").update({
+      categories: editGroup.categories,
+      invite_link: editGroup.invite_link || null,
+      is_flash_deals_only: editGroup.is_flash_deals_only,
+    }).eq("id", editGroup.id);
+    if (error) toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    else {
+      toast({ title: "Grupo atualizado!" });
+      setEditDialogOpen(false);
+      setEditGroup(null);
+      loadGroups();
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Configurações WhatsApp</h1>
 
+      {/* Evolution API Config Card */}
       <Card>
         <CardHeader>
           <CardTitle>Conexão com Evolution API</CardTitle>
@@ -166,6 +209,7 @@ export default function WhatsAppSettings() {
         </CardContent>
       </Card>
 
+      {/* Groups Card */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -214,6 +258,11 @@ export default function WhatsAppSettings() {
                       <Input placeholder="Descrição" value={newGroup.group_description}
                         onChange={(e) => setNewGroup({ ...newGroup, group_description: e.target.value })} />
                     </div>
+                    <div className="space-y-2">
+                      <Label>Link de Convite (opcional)</Label>
+                      <Input placeholder="https://chat.whatsapp.com/..." value={newGroup.invite_link}
+                        onChange={(e) => setNewGroup({ ...newGroup, invite_link: e.target.value })} />
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button onClick={addGroup}>Adicionar</Button>
@@ -234,6 +283,7 @@ export default function WhatsAppSettings() {
                   <TableHead>ID</TableHead>
                   <TableHead>Enviadas</TableHead>
                   <TableHead>Último Envio</TableHead>
+                  <TableHead>Nichos</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -241,10 +291,26 @@ export default function WhatsAppSettings() {
               <TableBody>
                 {groups.map((g) => (
                   <TableRow key={g.id}>
-                    <TableCell className="font-medium">{g.group_name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-1.5">
+                        {g.group_name}
+                        {g.is_flash_deals_only && (
+                          <Badge variant="destructive" className="text-[10px] px-1 py-0">
+                            <Zap className="h-3 w-3 mr-0.5" /> Flash
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell><code className="text-xs">{g.group_id}</code></TableCell>
                     <TableCell>{g.messages_sent}</TableCell>
                     <TableCell>{g.last_message_at ? new Date(g.last_message_at).toLocaleString("pt-BR") : "—"}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(g.categories || []).map((c: string) => (
+                          <Badge key={c} variant="secondary" className="text-[10px] px-1.5 py-0">{c}</Badge>
+                        ))}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {g.is_active ? (
                         <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30"><CheckCircle className="mr-1 h-3 w-3" /> Ativo</Badge>
@@ -253,9 +319,14 @@ export default function WhatsAppSettings() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => deleteGroup(g.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEditDialog(g)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteGroup(g.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -264,6 +335,58 @@ export default function WhatsAppSettings() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Group Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar Grupo</DialogTitle></DialogHeader>
+          {editGroup && (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-xs">Nome</Label>
+                <p className="font-medium">{editGroup.group_name}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-xs">ID</Label>
+                <p className="text-xs"><code>{editGroup.group_id}</code></p>
+              </div>
+              <div className="space-y-2">
+                <Label>Link de Convite</Label>
+                <Input placeholder="https://chat.whatsapp.com/..." value={editGroup.invite_link}
+                  onChange={(e) => setEditGroup({ ...editGroup, invite_link: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Categorias (Nichos)</Label>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORY_OPTIONS.map((cat) => {
+                    const selected = (editGroup.categories || []).includes(cat);
+                    return (
+                      <Badge
+                        key={cat}
+                        variant={selected ? "default" : "outline"}
+                        className="cursor-pointer select-none"
+                        onClick={() => toggleEditCategory(cat)}
+                      >
+                        {cat}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Apenas Ofertas Relâmpago</Label>
+                <Switch
+                  checked={editGroup.is_flash_deals_only}
+                  onCheckedChange={(v) => setEditGroup({ ...editGroup, is_flash_deals_only: v })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={saveEditGroup}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

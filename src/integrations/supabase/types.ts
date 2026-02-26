@@ -487,36 +487,45 @@ export type Database = {
       }
       whatsapp_groups: {
         Row: {
+          categories: string[] | null
           created_at: string
           group_description: string | null
           group_id: string
           group_name: string
           id: string
+          invite_link: string | null
           is_active: boolean | null
+          is_flash_deals_only: boolean | null
           last_message_at: string | null
           messages_sent: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          categories?: string[] | null
           created_at?: string
           group_description?: string | null
           group_id: string
           group_name: string
           id?: string
+          invite_link?: string | null
           is_active?: boolean | null
+          is_flash_deals_only?: boolean | null
           last_message_at?: string | null
           messages_sent?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          categories?: string[] | null
           created_at?: string
           group_description?: string | null
           group_id?: string
           group_name?: string
           id?: string
+          invite_link?: string | null
           is_active?: boolean | null
+          is_flash_deals_only?: boolean | null
           last_message_at?: string | null
           messages_sent?: number | null
           updated_at?: string
