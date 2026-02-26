@@ -570,6 +570,21 @@ export default function Pipeline() {
                             const shortUrl = p.short_link_code
                               ? `https://radardaspromos.lovable.app/r/${p.short_link_code}`
                               : p.product_url ?? "";
+
+                            // Fetch scarcity metadata from original raw_scrape
+                            let targetTime: string | undefined;
+                            let percentClaimed: string | undefined;
+                            if (p.raw_scrape_id) {
+                              const { data: rawData } = await supabase
+                                .from("raw_scrapes")
+                                .select("metadata")
+                                .eq("id", Number(p.raw_scrape_id))
+                                .maybeSingle();
+                              const meta = rawData?.metadata as Record<string, unknown> | null;
+                              targetTime = meta?.target_time as string | undefined;
+                              percentClaimed = meta?.percent_claimed as string | undefined;
+                            }
+
                             const msg = await generateMessage({
                               product_title: p.product_name,
                               price: p.promo_price ?? 0,
@@ -579,6 +594,8 @@ export default function Pipeline() {
                                 : null,
                               price_type: null,
                               original_url: shortUrl,
+                              target_time: targetTime,
+                              percent_claimed: percentClaimed,
                             });
                             if (msg) {
                               setReviewItems((prev) => prev.map((i) => i.id === p.id ? { ...i, ai_message: msg } : i));
@@ -587,10 +604,22 @@ export default function Pipeline() {
                             }
                           }}><RefreshCw className="mr-2 h-4 w-4" /> Regenerar</Button>
                           <Button variant="outline" size="sm" onClick={() => copyMessage(p.ai_message ?? "")}><Copy className="mr-2 h-4 w-4" /> Copiar</Button>
-                          <Button variant="outline" size="sm" onClick={() => {
+                          <Button variant="outline" size="sm" onClick={async () => {
                             const discount = p.original_price && p.promo_price
                               ? String(Math.round((1 - p.promo_price / p.original_price) * 100))
                               : null;
+
+                            // Fetch scarcity metadata from original raw_scrape
+                            let meta: Record<string, unknown> | null = null;
+                            if (p.raw_scrape_id) {
+                              const { data: rawData } = await supabase
+                                .from("raw_scrapes")
+                                .select("metadata")
+                                .eq("id", Number(p.raw_scrape_id))
+                                .maybeSingle();
+                              meta = rawData?.metadata as Record<string, unknown> | null;
+                            }
+
                             setCopyModalProduct({
                               id: 0,
                               product_title: p.product_name,
@@ -602,7 +631,7 @@ export default function Pipeline() {
                               price_type: null,
                               original_url: p.product_url,
                               image_url: p.product_image_url,
-                              metadata: null,
+                              metadata: meta,
                             });
                             setCopyModalOpen(true);
                           }}><MessageCircle className="mr-2 h-4 w-4" /> Gerar Copy</Button>
