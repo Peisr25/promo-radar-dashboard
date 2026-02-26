@@ -1,49 +1,44 @@
 
 
-## Criar pagina "Como Funciona" e atualizar rodape das paginas publicas
+## 3 Correções de UI na Landing Page
 
-### 1. Criar nova pagina `src/pages/HowItWorks.tsx`
+### 1. Marquee de Lojas - Cores com Grayscale
 
-Baseada no HTML de referencia (`code-2.html`) e no screenshot, a pagina tera as seguintes secoes:
+Adicionar cores específicas por loja no array `stores` e aplicar `grayscale hover:grayscale-0` com a cor de texto correta em cada item.
 
-- **Hero**: Badge "Tecnologia Exclusiva", titulo "Como Funciona o Radar IA" com gradiente purple-to-green, subtitulo descritivo
-- **3 Cards de Features**: Previsao de Preco, Filtro de Falsas Promos, Alerta Ultrarrapido - cada um com imagem de fundo (Unsplash), icone circular com glow, titulo e descricao
-- **Ciclo da Economia Inteligente**: Layout split - lado esquerdo com 3 steps numerados (Crawling, Analise & Validacao, Disparo), lado direito com imagem circular animada (bordas girando)
-- **Seguranca e Confianca**: Grid 2x2 com cards de Protecao de Dados, Links Verificados, Transparencia Total, Suporte Humano - cada um com icone colorido diferente
-- **CTA Final**: Icone rocket, titulo "Comece a economizar agora", botao verde neon "Entrar no Grupo VIP Gratis"
+- Atualizar o array `stores` para incluir uma propriedade `color` (ex: `text-orange-500` para Shopee, `text-blue-500` para Magalu, `text-yellow-500` para MercadoLivre, `text-red-500` para Americanas, `text-[#FF9900]` para Amazon)
+- Remover a classe `opacity-50 hover:opacity-100` do container pai (linha 152) que sobrepõe o efeito
+- Garantir que cada `<span>` do item tenha `grayscale hover:grayscale-0 transition-all duration-300` junto com a cor específica
 
-### 2. Adicionar rota no `src/App.tsx`
+### 2. Linha Conectora - Posicionamento
 
-- Nova rota: `/como-funciona` renderizando `HowItWorks`
+Na seção "Tecnologia a favor do seu bolso", alterar a posição vertical da linha decorativa.
 
-### 3. Linkar botao "Como funciona a IA" na landing page
+- Linha 174: Mudar `top-[60px]` para `top-10` (40px = metade de h-20/80px = centro do ícone)
 
-- No `src/pages/LandingPage.tsx`, o botao ghost "Como funciona a IA" passara a chamar `navigate("/como-funciona")`
+### 3. Cards de Canais - Efeito Glassmorphism
 
-### 4. Criar componente de rodape reutilizavel `src/components/PublicFooter.tsx`
+Nos cards não-highlighted da seção "Canais Segmentados", substituir as classes de fundo para recriar o efeito `.card-glass`.
 
-Baseado no rodape completo do HTML de referencia, com:
+- Linha 214: Substituir `border border-border/10 bg-card/5 backdrop-blur hover:border-secondary/40` por `bg-white/5 backdrop-blur-md border border-white/10 hover:border-secondary/40`
 
-- **Coluna esquerda**: Logo Radar das Promos + descricao curta
-- **Coluna "Plataforma"**: Links para Como Funciona (`/como-funciona`), Nossos Grupos (`/grupos`), Blog de Ofertas (placeholder)
-- **Coluna "Legal"**: Links para Termos de Uso (`/institucional#termos`), Privacidade (`/institucional#privacidade`), Contato (placeholder)
-- **Barra inferior**: Copyright + Nota de Transparencia sobre comissoes de afiliado
+### Detalhes técnicos
 
-### 5. Substituir rodape em todas as paginas publicas
+Ficheiro afetado: `src/pages/LandingPage.tsx`
 
-Substituir o footer atual nestas paginas pelo componente `PublicFooter`:
+**Stores array** (linhas 5-14): Adicionar campo `color`:
+```text
+{ icon: "shopping_cart", name: "amazon", color: "text-[#FF9900]" },
+{ icon: "shopping_bag", name: "Shopee", color: "text-orange-500" },
+{ icon: "storefront", name: "Magalu", color: "text-blue-500" },
+{ icon: "handshake", name: "MercadoLivre", color: "text-yellow-500" },
+{ icon: "local_mall", name: "Americanas", color: "text-red-500" },
+```
 
-- `src/pages/LandingPage.tsx`
-- `src/pages/Groups.tsx`
-- `src/pages/Institutional.tsx`
-- `src/pages/HowItWorks.tsx` (ja usara o componente)
+**Marquee container** (linha 152): Remover `opacity-50 transition-opacity duration-500 hover:opacity-100`, manter apenas `overflow-hidden whitespace-nowrap`.
 
-### Detalhes tecnicos
+**Marquee item** (linha 155): Adicionar `${s.color}` ao className para aplicar a cor por loja.
 
-- O componente `PublicFooter` recebera `navigate` via `useNavigate` internamente
-- Reutilizara o `MaterialIcon` helper (sera importado ou redefinido localmente)
-- Icone `Radar` de lucide-react para o logo
-- Todas as classes usam o sistema de design existente (cores CSS variables: `border`, `muted-foreground`, `secondary`, etc.)
-- As imagens dos cards de features usam URLs Unsplash publicas como background com `mix-blend-luminosity` e `opacity-30`
-- Animacoes de spin nas bordas do ciclo usam classes Tailwind `animate-spin` com duracao customizada via estilo inline
+**Linha conectora** (linha 174): `top-[60px]` -> `top-10`.
 
+**Cards normais** (linha 214): `border border-border/10 bg-card/5 backdrop-blur` -> `bg-white/5 backdrop-blur-md border border-white/10`.
