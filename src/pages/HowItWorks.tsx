@@ -22,7 +22,7 @@ const features = [
   },
   {
     icon: "notifications_active",
-    title: "Alerta Ultrarrápido",
+    title: "Alerta Ultra rápido",
     description: "Disparos em milissegundos via API para seu WhatsApp antes que o estoque acabe.",
     image: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=600&q=80",
   },
