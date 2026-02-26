@@ -1,54 +1,50 @@
 
 
-# Integrar Amazon ao Dashboard
+# Separar Visualmente o Bloco de Urgencia no Prompt da IA
 
-## Resumo
-Adicionar a Amazon como nova fonte de scraping na pagina Sources e como filtro no Pipeline, seguindo os padroes ja existentes para Magalu e Shopee.
+## Problema
+A IA esta a misturar a frase de humor/gancho com o texto de escassez no mesmo paragrafo, prejudicando a leitura no WhatsApp.
+
+## Solucao
+Atualizar os prompts em `buildDefaultPrompt()` e `buildCustomPrompt()` para definir uma estrutura de blocos obrigatoria, e reformular a injecao de escassez para instruir a IA a criar um paragrafo ISOLADO.
 
 ## Alteracoes
 
-### 1. Sources.tsx -- Card da Amazon
+### Ficheiro: `supabase/functions/generate-promo-message/index.ts`
 
-Adicionar um novo Card estatico (similar ao da Shopee mas mais simples, sem credenciais) entre o card da Shopee e a tabela de fontes genericas.
+**1. `buildDefaultPrompt()` (linhas 15-31)** -- Reformular a estrutura do formato para incluir o bloco de urgencia como item separado:
 
-- Icone: `Package` (lucide) ou reutilizar `ShoppingBag`
-- Titulo: "Amazon"
-- Badge: sempre "Pronto" (nao precisa de configuracao)
-- Descricao: "Motor de busca da Amazon. Sincronize para importar produtos."
-- Botao "Sincronizar" que faz POST para `start-scrape` com body `{ site_name: "amazon", source_id: "amazon_api_source" }`
-- Estado `amazonSyncing` para controlar loading do botao
-
-### 2. Pipeline.tsx -- Aba Amazon no filtro de fontes
-
-**Tipo do sourceFilter**: Alterar de `"all" | "magalu" | "shopee"` para `"all" | "magalu" | "shopee" | "amazon"` (linha 77).
-
-**Tabs de fonte** (linhas 377-387): Adicionar nova TabsTrigger:
 ```text
-<TabsTrigger value="amazon">
-  <span>📦 Amazon ({count})</span>
-</TabsTrigger>
+ESTRUTURA OBRIGATÓRIA (cada bloco separado por linha em branco):
+
+BLOCO 1 - GANCHO: [Emoji medalha] [FRASE ENGRAÇADA EM CAIXA ALTA]
+
+BLOCO 2 - TÍTULO: [Nome do produto em Title Case]
+
+BLOCO 3 - URGÊNCIA (APENAS se indicado): Parágrafo isolado com emojis ⚡ ou ⏳ sobre escassez.
+
+BLOCO 4 - PREÇO: Bloco de preço com formatação WhatsApp (~antigo~ por *novo*)
 ```
 
-### 3. Pipeline.tsx -- Badge visual Amazon nos cards de produto
+Adicionar regra explicita: "NUNCA misture o texto de urgencia/escassez no mesmo paragrafo da frase de humor inicial. A urgencia deve ser SEMPRE um bloco visual separado."
 
-Nas linhas 443-451, adicionar condicao para `source === "amazon"`:
+**2. `buildCustomPrompt()` (linhas 33-78)** -- Adicionar a mesma instrucao de estrutura em blocos e a regra de separacao.
+
+**3. Injecao de escassez (linhas 137-143)** -- Reformular `scarcityInstruction` para instruir explicitamente a IA a criar um paragrafo ISOLADO entre o titulo e o preco:
+
 ```text
-{s.source === "amazon" && (
-  <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">Amazon</Badge>
-)}
+BLOCO DE URGÊNCIA OBRIGATÓRIO: Crie um parágrafo ISOLADO (separado por linhas em branco)
+dedicado APENAS à escassez. Use emojis ⚡ ou ⏳.
+Exemplo: '⚡ OFERTA RELÂMPAGO: Já temos 84% vendido, corre que tá acabando!'
+NUNCA misture este texto com a frase de humor do gancho.
 ```
 
-Atualizar a condicao de fallback (linha 449) para excluir tambem "amazon":
-```text
-{s.source && s.source !== "magalu" && s.source !== "shopee" && s.source !== "amazon" && (
-```
+### Resumo das alteracoes
 
-## Ficheiros alterados
-
-| Ficheiro | Alteracao |
+| Local | O que muda |
 |---|---|
-| `src/pages/Sources.tsx` | Novo card Amazon com botao Sincronizar + estado `amazonSyncing` |
-| `src/pages/Pipeline.tsx` | Tipo sourceFilter expandido, nova aba Amazon, badge amber nos cards |
+| `buildDefaultPrompt()` | Formato reestruturado em 4 blocos explicitos com instrucao de separacao |
+| `buildCustomPrompt()` | Mesma instrucao de estrutura em blocos adicionada |
+| Bloco de scarcity (linha 137-143) | Instrucao reescrita para forcar paragrafo ISOLADO entre titulo e preco |
 
-Nao sao necessarias alteracoes na Edge Function `start-scrape` -- ela ja suporta o fluxo generico com `site_name` + `source_id`.
-
+Apenas o ficheiro `supabase/functions/generate-promo-message/index.ts` sera alterado. A funcao sera reimplantada automaticamente.
