@@ -1,0 +1,14 @@
+# Dependências Python para o scraper Amazon
+# Adicionar ao requirements.txt do backend Railway
+
+# HTTP client padrão
+requests>=2.31.0
+
+# TLS Fingerprinting — impersona browsers reais (Chrome, Edge, etc.)
+# ESSENCIAL para bypass do AWS WAF da Amazon
+curl_cffi>=0.7.0
+
+# FastAPI (já deve estar no backend)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.5.0
