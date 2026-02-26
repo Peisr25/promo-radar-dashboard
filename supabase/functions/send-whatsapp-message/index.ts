@@ -173,6 +173,125 @@ Deno.serve(async (req) => {
       }
     }
 
+    // === FETCH INVITE CODE ===
+    if (action === "fetch_invite_code") {
+      const { group_jid } = body;
+      if (!group_jid) {
+        return new Response(
+          JSON.stringify({ success: false, message: "group_jid é obrigatório" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      try {
+        const url = `${baseUrl}/group/inviteCode/${config.session_name}?groupJid=${encodeURIComponent(group_jid)}`;
+        const res = await fetch(url, {
+          method: "GET",
+          headers: { "apikey": config.api_key, "Content-Type": "application/json" },
+        });
+        const resText = await res.text();
+        let data;
+        try { data = resText ? JSON.parse(resText) : {}; } catch { data = { raw: resText }; }
+        const inviteCode = data?.inviteCode || data?.code || "";
+        const inviteUrl = inviteCode ? `https://chat.whatsapp.com/${inviteCode}` : "";
+        return new Response(
+          JSON.stringify({ success: res.ok, inviteCode, inviteUrl, message: res.ok ? "OK" : "Falha" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ success: false, message: (e as Error).message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // === REVOKE INVITE CODE ===
+    if (action === "revoke_invite_code") {
+      const { group_jid } = body;
+      if (!group_jid) {
+        return new Response(
+          JSON.stringify({ success: false, message: "group_jid é obrigatório" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      try {
+        const url = `${baseUrl}/group/revokeInviteCode/${config.session_name}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "apikey": config.api_key, "Content-Type": "application/json" },
+          body: JSON.stringify({ groupJid: group_jid }),
+        });
+        const resText = await res.text();
+        let data;
+        try { data = resText ? JSON.parse(resText) : {}; } catch { data = { raw: resText }; }
+        const inviteCode = data?.inviteCode || data?.code || "";
+        const inviteUrl = inviteCode ? `https://chat.whatsapp.com/${inviteCode}` : "";
+        return new Response(
+          JSON.stringify({ success: res.ok, inviteCode, inviteUrl, message: res.ok ? "Código revogado" : "Falha" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ success: false, message: (e as Error).message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // === UPDATE GROUP SUBJECT ===
+    if (action === "update_group_subject") {
+      const { group_jid, subject } = body;
+      if (!group_jid || !subject) {
+        return new Response(
+          JSON.stringify({ success: false, message: "group_jid e subject são obrigatórios" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      try {
+        const res = await fetch(`${baseUrl}/group/updateGroupSubject/${config.session_name}`, {
+          method: "POST",
+          headers: { "apikey": config.api_key, "Content-Type": "application/json" },
+          body: JSON.stringify({ groupJid: group_jid, subject }),
+        });
+        return new Response(
+          JSON.stringify({ success: res.ok, message: res.ok ? "Nome atualizado" : "Falha ao atualizar nome" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ success: false, message: (e as Error).message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // === UPDATE GROUP DESCRIPTION ===
+    if (action === "update_group_description") {
+      const { group_jid, description } = body;
+      if (!group_jid) {
+        return new Response(
+          JSON.stringify({ success: false, message: "group_jid é obrigatório" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      try {
+        const res = await fetch(`${baseUrl}/group/updateGroupDescription/${config.session_name}`, {
+          method: "POST",
+          headers: { "apikey": config.api_key, "Content-Type": "application/json" },
+          body: JSON.stringify({ groupJid: group_jid, description: description || "" }),
+        });
+        return new Response(
+          JSON.stringify({ success: res.ok, message: res.ok ? "Descrição atualizada" : "Falha ao atualizar descrição" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ success: false, message: (e as Error).message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // === SEND MESSAGE ===
     if (action === "send") {
       if (!group_id || !text) {
@@ -219,7 +338,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ error: "Ação inválida. Use: send, test, fetch_groups" }),
+      JSON.stringify({ error: "Ação inválida. Use: send, test, fetch_groups, fetch_invite_code, revoke_invite_code, update_group_subject, update_group_description" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
