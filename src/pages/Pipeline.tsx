@@ -149,18 +149,25 @@ export default function Pipeline() {
     return [...new Set(cats)].sort();
   }, [scrapes]);
 
-  const isGenericCategory = (source: string | null, categoria?: string) => {
-    if (!categoria) return true;
-    if (source === "shopee" && categoria === "Shopee Geral") return true;
-    // Amazon categories are in English with underscores (e.g. "electronics_accessories")
-    if (source === "amazon" && /^[a-z0-9_]+$/i.test(categoria)) return true;
+  const isGenericCategory = (source: string | null, metadata: any) => {
+    if (!metadata) return true;
+    
+    if (source === "shopee") {
+      return !metadata.categoria || metadata.categoria === "Shopee Geral";
+    }
+    
+    if (source === "amazon") {
+      if (metadata.categoria === "Amazon Ofertas") return true;
+      if (metadata.amazon_category && /^[a-z0-9_]+$/i.test(metadata.amazon_category)) return true;
+    }
+    
     return false;
   };
 
   const uncategorizedProducts = useMemo(() => {
     return scrapes.filter(s =>
       (s.source === "shopee" || s.source === "amazon") &&
-      isGenericCategory(s.source, s.metadata?.categoria ?? s.metadata?.amazon_category)
+      isGenericCategory(s.source, s.metadata)
     );
   }, [scrapes]);
 
