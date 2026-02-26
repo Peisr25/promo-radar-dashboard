@@ -93,7 +93,7 @@ export default function LandingPage() {
       {/* ─── MAIN ─── */}
       <main className="relative pt-32 pb-20">
         {/* hero glow */}
-        <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] bg-[radial-gradient(circle_at_center,hsl(263_70%_58%/0.15)_0%,transparent_70%)] z-0" />
+        <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-full h-[1200px] bg-[radial-gradient(circle_at_top,hsl(263_70%_58%/0.15)_0%,transparent_70%)] z-0" />
 
         {/* ─── HERO ─── */}
         <section className="relative z-10 px-4 md:px-6 mb-24">
@@ -145,7 +145,7 @@ export default function LandingPage() {
         </section>
 
         {/* ─── STORE MARQUEE ─── */}
-        <section className="mb-24 overflow-hidden border-y border-border/10 bg-card/5 py-10">
+        <section className="mb-24 overflow-hidden border-y border-border/10 py-10">
           <div className="mx-auto mb-6 max-w-7xl px-6 text-center">
             <p className="text-sm uppercase tracking-widest font-medium text-muted-foreground">Monitoramos as maiores lojas do Brasil</p>
           </div>
