@@ -77,7 +77,7 @@ export default function LandingPage() {
           </div>
           <div className="hidden items-center gap-6 md:flex">
             <a href="#tech" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Tecnologia</a>
-            <a href="#channels" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Grupos</a>
+            <button onClick={() => navigate("/grupos")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Grupos</button>
             <a href="#stats" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Segurança</a>
           </div>
           <Button size="sm" variant="outline" className="border-secondary/30 text-secondary hover:bg-secondary/10" onClick={() => navigate("/admin")}>
@@ -243,9 +243,7 @@ export default function LandingPage() {
             <span className="text-sm font-semibold">Radar das Promos</span>
           </div>
           <div className="flex gap-4 text-xs text-muted-foreground">
-            <a href="#" className="hover:text-foreground transition-colors">Sobre</a>
-            <a href="#" className="hover:text-foreground transition-colors">Privacidade</a>
-            <a href="#" className="hover:text-foreground transition-colors">Termos</a>
+            <button onClick={() => navigate("/institucional")} className="hover:text-foreground transition-colors">Institucional e Termos Legais</button>
           </div>
           <p className="text-xs text-muted-foreground">© 2024 Radar Tech. All rights reserved.</p>
         </div>
