@@ -1,35 +1,49 @@
 
 
-## Tornar a pagina /grupos funcional
+## Criar pagina "Como Funciona" e atualizar rodape das paginas publicas
 
-### Problemas atuais
-- Os botoes de categoria (pills) nao fazem nada ao clicar - o estado ativo esta fixo no primeiro item (index === 0)
-- Os cards de grupos nao tem uma propriedade de categoria para filtrar
-- Os botoes "Entrar Agora" / "Avisar Vaga" nao tem acao
+### 1. Criar nova pagina `src/pages/HowItWorks.tsx`
 
-### Mudancas planejadas
+Baseada no HTML de referencia (`code-2.html`) e no screenshot, a pagina tera as seguintes secoes:
 
-**1. Filtro de categorias funcional**
-- Adicionar `useState` para controlar a categoria selecionada (default: "Todos")
-- Adicionar campo `category` a cada grupo no array `groups` mapeando para as categorias existentes (Tech, Casa, Moda, Geek, Kids, Relampago)
-- Ao clicar num pill, atualizar o estado e filtrar os cards exibidos
-- "Todos" mostra todos os grupos
+- **Hero**: Badge "Tecnologia Exclusiva", titulo "Como Funciona o Radar IA" com gradiente purple-to-green, subtitulo descritivo
+- **3 Cards de Features**: Previsao de Preco, Filtro de Falsas Promos, Alerta Ultrarrapido - cada um com imagem de fundo (Unsplash), icone circular com glow, titulo e descricao
+- **Ciclo da Economia Inteligente**: Layout split - lado esquerdo com 3 steps numerados (Crawling, Analise & Validacao, Disparo), lado direito com imagem circular animada (bordas girando)
+- **Seguranca e Confianca**: Grid 2x2 com cards de Protecao de Dados, Links Verificados, Transparencia Total, Suporte Humano - cada um com icone colorido diferente
+- **CTA Final**: Icone rocket, titulo "Comece a economizar agora", botao verde neon "Entrar no Grupo VIP Gratis"
 
-**2. Botoes de acao nos cards**
-- "Entrar Agora" abre um link externo do WhatsApp (placeholder `https://chat.whatsapp.com/...`) em nova aba
-- "Avisar Vaga" (lista de espera) mostra um toast de confirmacao usando sonner
+### 2. Adicionar rota no `src/App.tsx`
 
-**3. Newsletter funcional**
-- Adicionar validacao basica do email e toast de sucesso ao submeter
+- Nova rota: `/como-funciona` renderizando `HowItWorks`
+
+### 3. Linkar botao "Como funciona a IA" na landing page
+
+- No `src/pages/LandingPage.tsx`, o botao ghost "Como funciona a IA" passara a chamar `navigate("/como-funciona")`
+
+### 4. Criar componente de rodape reutilizavel `src/components/PublicFooter.tsx`
+
+Baseado no rodape completo do HTML de referencia, com:
+
+- **Coluna esquerda**: Logo Radar das Promos + descricao curta
+- **Coluna "Plataforma"**: Links para Como Funciona (`/como-funciona`), Nossos Grupos (`/grupos`), Blog de Ofertas (placeholder)
+- **Coluna "Legal"**: Links para Termos de Uso (`/institucional#termos`), Privacidade (`/institucional#privacidade`), Contato (placeholder)
+- **Barra inferior**: Copyright + Nota de Transparencia sobre comissoes de afiliado
+
+### 5. Substituir rodape em todas as paginas publicas
+
+Substituir o footer atual nestas paginas pelo componente `PublicFooter`:
+
+- `src/pages/LandingPage.tsx`
+- `src/pages/Groups.tsx`
+- `src/pages/Institutional.tsx`
+- `src/pages/HowItWorks.tsx` (ja usara o componente)
 
 ### Detalhes tecnicos
 
-Arquivo alterado: `src/pages/Groups.tsx`
+- O componente `PublicFooter` recebera `navigate` via `useNavigate` internamente
+- Reutilizara o `MaterialIcon` helper (sera importado ou redefinido localmente)
+- Icone `Radar` de lucide-react para o logo
+- Todas as classes usam o sistema de design existente (cores CSS variables: `border`, `muted-foreground`, `secondary`, etc.)
+- As imagens dos cards de features usam URLs Unsplash publicas como background com `mix-blend-luminosity` e `opacity-30`
+- Animacoes de spin nas bordas do ciclo usam classes Tailwind `animate-spin` com duracao customizada via estilo inline
 
-- Importar `useState` do React e `toast` do sonner
-- Cada objeto em `groups` recebe `category: string` (ex: "Tech", "Casa", "Moda", "Geek", "Relâmpago", "Kids")
-- Estado: `const [activeCategory, setActiveCategory] = useState("Todos")`
-- Filtragem: `const filtered = activeCategory === "Todos" ? groups : groups.filter(g => g.category === activeCategory)`
-- Pills usam `activeCategory === cat.label` para estilo ativo em vez de `i === 0`
-- Botao CTA: grupos com status "Vagas Abertas" ou "Ultimas Vagas" abrem link WhatsApp; grupos com "Lista de Espera" disparam `toast.success("Voce sera avisado quando abrir vaga!")`
-- Newsletter: estado para email, validacao basica, toast de confirmacao
