@@ -16,14 +16,14 @@ import {
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Fontes", url: "/sources", icon: Globe },
-  { title: "Pipeline", url: "/pipeline", icon: GitBranch },
-  { title: "Automações", url: "/automations", icon: Bot },
-  { title: "Scraper Logs", url: "/scraper-logs", icon: ScrollText },
-  { title: "Links Encurtados", url: "/links", icon: Link2 },
-  { title: "WhatsApp", url: "/whatsapp", icon: MessageCircle },
-  { title: "Configurações", url: "/settings", icon: Settings },
+  { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
+  { title: "Fontes", url: "/admin/sources", icon: Globe },
+  { title: "Pipeline", url: "/admin/pipeline", icon: GitBranch },
+  { title: "Automações", url: "/admin/automations", icon: Bot },
+  { title: "Scraper Logs", url: "/admin/scraper-logs", icon: ScrollText },
+  { title: "Links Encurtados", url: "/admin/links", icon: Link2 },
+  { title: "WhatsApp", url: "/admin/whatsapp", icon: MessageCircle },
+  { title: "Configurações", url: "/admin/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -49,7 +49,7 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      end={item.url === "/"}
+                      end={item.url === "/admin"}
                       className="hover:bg-muted/50"
                       activeClassName="bg-muted text-primary font-medium"
                     >
