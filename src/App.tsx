@@ -15,6 +15,7 @@ import ShortLinks from "@/pages/ShortLinks";
 import WhatsAppSettings from "@/pages/WhatsAppSettings";
 import Automations from "@/pages/Automations";
 import Redirect from "@/pages/Redirect";
+import LandingPage from "@/pages/LandingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
+            <Route path="/" element={<LandingPage />} />
             <Route path="/admin/auth" element={<AuthRoute />} />
             <Route path="/admin" element={<DashboardLayout />}>
               <Route index element={<Dashboard />} />
