@@ -1,44 +1,68 @@
 
 
-## 3 Correções de UI na Landing Page
+## Integrar Shein no Dashboard
 
-### 1. Marquee de Lojas - Cores com Grayscale
+### 1. Página Sources - Card Shein
 
-Adicionar cores específicas por loja no array `stores` e aplicar `grayscale hover:grayscale-0` com a cor de texto correta em cada item.
+Adicionar um novo Card para a Shein entre o card Amazon e o card Shopee, com estilo escuro (bg-zinc-900 text-white). O botao "Sincronizar" enviara o payload `{ site_name: "shein", source_id: "shein_api_source" }` para a edge function `start-scrape`, seguindo o mesmo padrao do card Amazon.
 
-- Atualizar o array `stores` para incluir uma propriedade `color` (ex: `text-orange-500` para Shopee, `text-blue-500` para Magalu, `text-yellow-500` para MercadoLivre, `text-red-500` para Americanas, `text-[#FF9900]` para Amazon)
-- Remover a classe `opacity-50 hover:opacity-100` do container pai (linha 152) que sobrepõe o efeito
-- Garantir que cada `<span>` do item tenha `grayscale hover:grayscale-0 transition-all duration-300` junto com a cor específica
+**Ficheiro:** `src/pages/Sources.tsx`
+- Adicionar estado `sheinSyncing`
+- Adicionar Card com fundo escuro (`className="bg-zinc-900 text-white border-zinc-800"`)
+- Botao Sincronizar com a mesma logica do Amazon mas com payload Shein
 
-### 2. Linha Conectora - Posicionamento
+### 2. Pipeline - Filtro de Fonte Shein
 
-Na seção "Tecnologia a favor do seu bolso", alterar a posição vertical da linha decorativa.
+Adicionar a tab "Shein" aos filtros de fonte no topo do Pipeline.
 
-- Linha 174: Mudar `top-[60px]` para `top-10` (40px = metade de h-20/80px = centro do ícone)
+**Ficheiro:** `src/pages/Pipeline.tsx`
 
-### 3. Cards de Canais - Efeito Glassmorphism
+- Linha 81: Expandir o tipo do `sourceFilter` para incluir `"shein"`
+- Linha 401-414: Adicionar nova `TabsTrigger` para Shein com emoji preto/escuro
+- Linha 469-481: Adicionar bloco de Badge para `s.source === "shein"` com estilo escuro (`bg-zinc-900 text-white border-zinc-700`)
 
-Nos cards não-highlighted da seção "Canais Segmentados", substituir as classes de fundo para recriar o efeito `.card-glass`.
+### 3. Pipeline - Badges de Prova Social Shein nos Cards
 
-- Linha 214: Substituir `border border-border/10 bg-card/5 backdrop-blur hover:border-secondary/40` por `bg-white/5 backdrop-blur-md border border-white/10 hover:border-secondary/40`
+Quando um produto for da Shein e possuir metadados especificos, mostrar badges adicionais.
 
-### Detalhes técnicos
+**Ficheiro:** `src/pages/Pipeline.tsx` (dentro do bloco de renderizacao dos cards, apos linha 489)
 
-Ficheiro afetado: `src/pages/LandingPage.tsx`
+- Se `s.metadata?.rank_info` existir: mostrar Badge dourado (`bg-amber-500/20 text-amber-400 border-amber-500/30`) com o texto do ranking (ex: "🏆 #3 Mais Vendido em Calcados")
+- Se `s.metadata?.shein_rating` existir: mostrar a nota inline (ex: "star 4.9") junto com `shein_reviews` se disponivel
 
-**Stores array** (linhas 5-14): Adicionar campo `color`:
+### 4. Edge Function - Injecao de Prova Social
+
+Atualizar a edge function `generate-promo-message` para injetar contexto de prova social quando o produto for da Shein.
+
+**Ficheiro:** `supabase/functions/generate-promo-message/index.ts`
+
+Apos o bloco de recuperacao de escassez (linha ~130), adicionar logica:
+- Verificar se `source === "shein"` no payload (adicionar campo `source` ao body)
+- Se existir `metadata.rank_info` ou `metadata.shein_rating >= 4.8`, construir uma instrucao de prova social
+- Injetar no prompt e no user content, seguindo o mesmo padrao da instrucao de escassez
+
+Texto da instrucao:
 ```text
-{ icon: "shopping_cart", name: "amazon", color: "text-[#FF9900]" },
-{ icon: "shopping_bag", name: "Shopee", color: "text-orange-500" },
-{ icon: "storefront", name: "Magalu", color: "text-blue-500" },
-{ icon: "handshake", name: "MercadoLivre", color: "text-yellow-500" },
-{ icon: "local_mall", name: "Americanas", color: "text-red-500" },
+Este produto e um sucesso de vendas na Shein. O metadata indica que ele e: {rank_info} e possui uma nota de {shein_rating} com {shein_reviews} avaliacoes. Inclua no texto promocional um gatilho de aprovacao popular forte (ex: "Selo de Mais Vendido", "Quase 5 estrelas em milhares de avaliacoes!").
 ```
 
-**Marquee container** (linha 152): Remover `opacity-50 transition-opacity duration-500 hover:opacity-100`, manter apenas `overflow-hidden whitespace-nowrap`.
+### 5. Pipeline - Passar source na chamada de IA
 
-**Marquee item** (linha 155): Adicionar `${s.color}` ao className para aplicar a cor por loja.
+Para que a edge function saiba que o produto e da Shein, passar o campo `source` e os metadados relevantes na chamada `generateMessage` / `processPromotion`.
 
-**Linha conectora** (linha 174): `top-[60px]` -> `top-10`.
+**Ficheiro:** `src/pages/Pipeline.tsx` (funcao `processPromotion`, linha ~297)
+- Adicionar `source: scrape.source` ao payload
+- Adicionar `metadata: scrape.metadata` ao payload para que a edge function possa ler `rank_info`, `shein_rating`, `shein_reviews`
 
-**Cards normais** (linha 214): `border border-border/10 bg-card/5 backdrop-blur` -> `bg-white/5 backdrop-blur-md border border-white/10`.
+**Ficheiro:** `supabase/functions/generate-promo-message/index.ts`
+- Extrair `source` e `metadata` do body
+- Usar estes campos na logica de prova social
+
+### Resumo de ficheiros afetados
+
+| Ficheiro | Alteracao |
+|---|---|
+| `src/pages/Sources.tsx` | Card Shein com sync |
+| `src/pages/Pipeline.tsx` | Tab Shein, badge fonte, badges prova social, payload IA |
+| `supabase/functions/generate-promo-message/index.ts` | Injecao de prova social Shein |
+
