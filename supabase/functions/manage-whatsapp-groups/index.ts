@@ -13,6 +13,91 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function getNextGroupName(currentName: string): string {
+  const regex = /(.*?)\s*#(\d+)$/;
+  const match = currentName.match(regex);
+  if (match) {
+    const prefix = match[1];
+    const next = parseInt(match[2], 10) + 1;
+    const padded = next.toString().padStart(match[2].length, "0");
+    return `${prefix} #${padded}`;
+  }
+  return `${currentName} #02`;
+}
+
+async function createOverflowGroup(
+  adminClient: any,
+  baseUrl: string,
+  instanceName: string,
+  apiHeaders: Record<string, string>,
+  sourceGroup: any,
+  userId: string,
+): Promise<{ success: boolean; newName?: string; error?: string }> {
+  const newName = getNextGroupName(sourceGroup.group_name);
+  const adminNumber = Deno.env.get("ADMIN_WHATSAPP_NUMBER");
+  if (!adminNumber) {
+    return { success: false, error: "ADMIN_WHATSAPP_NUMBER not configured" };
+  }
+
+  // Anti-spam delay
+  await new Promise((r) => setTimeout(r, 8000));
+
+  // Create group via Evolution API
+  const createRes = await fetch(`${baseUrl}/group/create/${instanceName}`, {
+    method: "POST",
+    headers: apiHeaders,
+    body: JSON.stringify({ subject: newName, participants: [adminNumber] }),
+  });
+  const createText = await createRes.text();
+  console.log(`overflow: create group "${newName}" response: ${createRes.status}`);
+  if (!createRes.ok) {
+    return { success: false, newName, error: `API error ${createRes.status}: ${createText.substring(0, 200)}` };
+  }
+
+  let createData: any;
+  try { createData = JSON.parse(createText); } catch { createData = {}; }
+  const jid = createData?.id || createData?.jid || createData?.groupId || "";
+  if (!jid) {
+    return { success: false, newName, error: "Could not get JID from created group" };
+  }
+
+  // Fetch invite link
+  let inviteLink = "";
+  try {
+    const inviteRes = await fetch(
+      `${baseUrl}/group/inviteCode/${instanceName}?groupJid=${encodeURIComponent(jid)}`,
+      { headers: apiHeaders },
+    );
+    const inviteData = await inviteRes.json();
+    const code = inviteData?.inviteCode || inviteData?.code || "";
+    if (code) inviteLink = `https://chat.whatsapp.com/${code}`;
+  } catch (e) {
+    console.log("overflow: failed to get invite code:", (e as Error).message);
+  }
+
+  // Insert new group inheriting config from source
+  const { error: insertError } = await adminClient
+    .from("whatsapp_groups")
+    .insert({
+      user_id: userId,
+      group_id: jid,
+      group_name: newName,
+      categories: sourceGroup.categories || [],
+      is_flash_deals_only: sourceGroup.is_flash_deals_only || false,
+      invite_link: inviteLink || null,
+      participant_count: 1,
+      is_full: false,
+      is_active: true,
+    });
+
+  if (insertError) {
+    return { success: false, newName, error: insertError.message };
+  }
+
+  console.log(`overflow: group "${newName}" created successfully (jid: ${jid})`);
+  return { success: true, newName };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -31,7 +116,6 @@ Deno.serve(async (req) => {
     if (action === "cron_sync_all") {
       console.log("cron_sync_all: starting global sync");
 
-      // Fetch all active evolution configs
       const { data: configs, error: configsError } = await adminClient
         .from("evolution_config")
         .select("*")
@@ -44,6 +128,8 @@ Deno.serve(async (req) => {
 
       let totalUsersProcessed = 0;
       let totalGroupsUpdated = 0;
+      let totalOverflows = 0;
+      const overflowDetails: string[] = [];
       const errors: string[] = [];
 
       for (const config of configs) {
@@ -66,7 +152,7 @@ Deno.serve(async (req) => {
 
           const { data: dbGroups } = await adminClient
             .from("whatsapp_groups")
-            .select("id, group_id, max_participants")
+            .select("id, group_id, max_participants, group_name, categories, is_flash_deals_only, is_full")
             .eq("user_id", userId);
 
           if (!dbGroups || dbGroups.length === 0) {
@@ -92,6 +178,18 @@ Deno.serve(async (req) => {
               .update({ participant_count: size, is_full: isFull, updated_at: new Date().toISOString() })
               .eq("id", dbg.id);
             if (!error) updated++;
+
+            // Overflow: group just became full
+            if (isFull && !dbg.is_full) {
+              console.log(`cron_sync_all: overflow detected for "${dbg.group_name}" (user ${userId})`);
+              const result = await createOverflowGroup(adminClient, baseUrl, instanceName, apiHeaders, dbg, userId);
+              if (result.success) {
+                totalOverflows++;
+                overflowDetails.push(result.newName!);
+              } else {
+                errors.push(`Overflow failed for "${dbg.group_name}": ${result.error}`);
+              }
+            }
           }
 
           totalGroupsUpdated += updated;
@@ -102,11 +200,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log(`cron_sync_all: done. Users: ${totalUsersProcessed}, Groups: ${totalGroupsUpdated}, Errors: ${errors.length}`);
+      console.log(`cron_sync_all: done. Users: ${totalUsersProcessed}, Groups: ${totalGroupsUpdated}, Overflows: ${totalOverflows}, Errors: ${errors.length}`);
       return jsonResponse({
         success: true,
         users_processed: totalUsersProcessed,
         groups_updated: totalGroupsUpdated,
+        overflows: totalOverflows,
+        overflow_details: overflowDetails.length > 0 ? overflowDetails : undefined,
         errors: errors.length > 0 ? errors : undefined,
       });
     }
@@ -157,11 +257,11 @@ Deno.serve(async (req) => {
 
       const { data: dbGroups } = await adminClient
         .from("whatsapp_groups")
-        .select("id, group_id, max_participants")
+        .select("id, group_id, max_participants, group_name, categories, is_flash_deals_only, is_full")
         .eq("user_id", userId);
 
       if (!dbGroups || dbGroups.length === 0) {
-        return jsonResponse({ success: true, updated: 0, message: "Nenhum grupo no banco" });
+        return jsonResponse({ success: true, updated: 0, overflows: 0, message: "Nenhum grupo no banco" });
       }
 
       const sizeMap = new Map<string, number>();
@@ -172,6 +272,9 @@ Deno.serve(async (req) => {
       }
 
       let updated = 0;
+      let overflows = 0;
+      const overflowDetails: string[] = [];
+
       for (const dbg of dbGroups) {
         const size = sizeMap.get(dbg.group_id);
         if (size === undefined) continue;
@@ -182,9 +285,27 @@ Deno.serve(async (req) => {
           .update({ participant_count: size, is_full: isFull, updated_at: new Date().toISOString() })
           .eq("id", dbg.id);
         if (!error) updated++;
+
+        // Overflow: group just became full
+        if (isFull && !dbg.is_full) {
+          console.log(`sync_counts: overflow detected for "${dbg.group_name}"`);
+          const result = await createOverflowGroup(adminClient, baseUrl, instanceName, apiHeaders, dbg, userId);
+          if (result.success) {
+            overflows++;
+            overflowDetails.push(result.newName!);
+          } else {
+            console.error(`sync_counts: overflow failed for "${dbg.group_name}":`, result.error);
+          }
+        }
       }
 
-      return jsonResponse({ success: true, updated, message: `${updated} grupo(s) atualizado(s)` });
+      return jsonResponse({
+        success: true,
+        updated,
+        overflows,
+        overflow_details: overflowDetails.length > 0 ? overflowDetails : undefined,
+        message: `${updated} grupo(s) atualizado(s), ${overflows} transbordo(s) criado(s)`,
+      });
     }
 
     // ===== CREATE GROUP =====
