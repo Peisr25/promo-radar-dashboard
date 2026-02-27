@@ -496,8 +496,11 @@ export type Database = {
           invite_link: string | null
           is_active: boolean | null
           is_flash_deals_only: boolean | null
+          is_full: boolean | null
           last_message_at: string | null
+          max_participants: number | null
           messages_sent: number | null
+          participant_count: number | null
           updated_at: string
           user_id: string
         }
@@ -511,8 +514,11 @@ export type Database = {
           invite_link?: string | null
           is_active?: boolean | null
           is_flash_deals_only?: boolean | null
+          is_full?: boolean | null
           last_message_at?: string | null
+          max_participants?: number | null
           messages_sent?: number | null
+          participant_count?: number | null
           updated_at?: string
           user_id: string
         }
@@ -526,8 +532,11 @@ export type Database = {
           invite_link?: string | null
           is_active?: boolean | null
           is_flash_deals_only?: boolean | null
+          is_full?: boolean | null
           last_message_at?: string | null
+          max_participants?: number | null
           messages_sent?: number | null
+          participant_count?: number | null
           updated_at?: string
           user_id?: string
         }
