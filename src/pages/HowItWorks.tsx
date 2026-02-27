@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -60,9 +59,6 @@ const trustCards = [
 export default function HowItWorks() {
   const navigate = useNavigate();
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
