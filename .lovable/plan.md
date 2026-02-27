@@ -1,59 +1,102 @@
 
-## Plano: Transbordo Automatico na Edge Function
+## Plano: Broadcast por Nicho + Painel de Copywriting
 
 ### Resumo
 
-Quando o `sync_counts` detecta que um grupo acabou de lotar (transicao `is_full: false -> true`), cria automaticamente o proximo grupo via Evolution API, herdando categorias e configuracoes do grupo original.
+Transformar o sistema de automacao de "1 regra -> 1 grupo" para "1 regra -> N grupos por nicho", adicionar controles avancados de copywriting no modal, e fazer o motor de IA respeitar essas configuracoes.
 
-### Mudancas na Edge Function `manage-whatsapp-groups/index.ts`
+---
 
-#### 1. Expandir o SELECT dos dbGroups
+### 1. Frontend -- AutomationRuleModal.tsx
 
-Atualmente o `sync_counts` faz `select("id, group_id, max_participants")`. Precisamos adicionar `group_name, categories, is_flash_deals_only, is_full, user_id` para ter os dados necessarios para o transbordo.
+**Remover:**
+- Campo `target_group_id` (Select de grupo especifico) -- linhas 263-287
+- Remover do schema Zod e dos defaultValues
+- Remover query `whatsapp_groups_select` (ja nao e necessaria)
 
-#### 2. Adicionar helper `getNextGroupName`
+**Adicionar -- target_categories (Nichos Alvo):**
+- Novo campo com checkboxes para selecionar nichos de destino (Tech, Casa, Moda, Geek, Kids, Geral, etc.)
+- Buscar as categorias distintas da coluna `categories` da tabela `whatsapp_groups` (nao confundir com categorias de produtos)
+- Incluir opcao "Todos os Nichos" (token `__all__`)
+- Visual: badges clicaveis, mesmo padrao do campo de categorias de produto existente
 
-Funcao que extrai o numero do nome do grupo via regex e incrementa:
-- `"Radar das Promos TECH #01"` -> `"Radar das Promos TECH #02"`
-- `"Radar das Promos TECH #09"` -> `"Radar das Promos TECH #10"`
-- `"Meu Grupo"` (sem numero) -> `"Meu Grupo #02"`
+**Adicionar -- Accordion "Configuracao da Mensagem (Copy)":**
+- Componente Accordion com titulo "Configuracao da Mensagem (Copy)"
+- Dentro do accordion, 4 controles que alimentam o campo `message_config` (JSONB):
 
-Regex: `/(.*?)\s*#(\d+)$/` -- captura prefixo e numero, incrementa com zero-padding.
+| Controle | Tipo | Opcoes |
+|---|---|---|
+| Tom de Voz | Select | `urgente` (Escassez/Bug), `amigavel` (Descontrado), `profissional` (Direto) |
+| Tamanho da Copy | Select | `curta` (Impacto Rapido), `detalhada` (Com especificacoes) |
+| Quantidade de Emojis | Select | `alta`, `moderada`, `baixa` |
+| Destacar Parcelamento | Switch | Sim / Nao |
 
-#### 3. Logica de transbordo apos o update
+**Atualizar schema Zod:**
+- Remover `target_group_id`
+- Adicionar `target_categories: z.array(z.string()).min(1)`
+- Adicionar `message_config` com campos: `tone`, `copy_length`, `emoji_level`, `show_installments`
 
-Dentro do loop do `sync_counts`, logo apos o `.update({ is_full: isFull })`:
+**Atualizar mutacao de INSERT:**
+- Salvar `target_categories` e `message_config` no insert
+- Nao enviar mais `target_group_id`
+
+---
+
+### 2. Edge Function -- process-automations/index.ts
+
+**Busca dinamica de grupos por nicho:**
+- Apos encontrar a regra que faz match com o scrape, em vez de buscar 1 grupo por UUID, fazer:
 
 ```text
-if (isFull && !dbg.is_full) {
-  // Grupo acabou de lotar nesta execucao
-  1. Gerar novo nome com getNextGroupName(dbg.group_name)
-  2. Ler ADMIN_WHATSAPP_NUMBER do Deno.env
-  3. POST /group/create/{instance} com { subject: novoNome, participants: [adminNumber] }
-  4. GET /group/inviteCode/{instance}?groupJid={novoJid}
-  5. INSERT na tabela whatsapp_groups herdando:
-     - user_id: userId (do contexto autenticado)
-     - categories: dbg.categories
-     - is_flash_deals_only: dbg.is_flash_deals_only
-     - participant_count: 1, is_full: false, is_active: true
-  6. Incrementar contador de transbordos
-}
+SELECT group_id, group_name, id FROM whatsapp_groups
+WHERE is_active = true
+  AND categories && rule.target_categories  (overlaps)
+  AND user_id = userId
 ```
 
-#### 4. Atualizar resposta
+- Se `target_categories` contiver `__all__`, buscar todos os grupos ativos do utilizador
 
-O retorno do `sync_counts` passara a incluir `overflows` (numero de transbordos criados) e `overflow_details` (array com nomes dos novos grupos).
+**Enviar message_config para generate-promo-message:**
+- Adicionar `rule.message_config` ao payload da chamada `generate-promo-message`
 
-#### 5. Aplicar a mesma logica no `cron_sync_all`
+**Loop de envio multi-grupo:**
+- Para cada grupo encontrado, enviar a MESMA mensagem gerada (gerar 1x, enviar Nx)
+- Registar cada envio no `whatsapp_messages_log` com o `group_id` respetivo
+- Incrementar `messages_sent` para cada grupo
+- Respeitar delay anti-spam entre cada envio individual
 
-O `cron_sync_all` tambem faz sync de contagens. Aplicar a mesma logica de transbordo la, usando o `config.api_key` e `config.api_url` do loop, e lendo `ADMIN_WHATSAPP_NUMBER` do env. Adicionar `totalOverflows` ao retorno.
+**Atualizar logs:**
+- Log de processamento inclui quantos grupos receberam cada mensagem
+- Log final inclui total de mensagens (sent = scrapes * grupos)
 
-### Timer anti-spam
+---
 
-Antes de criar o grupo via API, aguardar 8 segundos (`await new Promise(r => setTimeout(r, 8000))`) conforme o padrao anti-spam ja estabelecido no projeto.
+### 3. Edge Function -- generate-promo-message/index.ts
 
-### Arquivo modificado
+**Receber message_config:**
+- Extrair do body: `message_config` (objeto com `tone`, `copy_length`, `emoji_level`, `show_installments`)
 
-- `supabase/functions/manage-whatsapp-groups/index.ts`
+**Novo modo `broadcast`:**
+- Quando `message_config` estiver presente, construir um prompt dinamico que injeta:
+  - Tom de voz mapeado (urgente/amigavel/profissional -> instrucoes em portugues)
+  - Limite de linhas baseado em `copy_length` (curta: max 4 linhas, detalhada: max 8 linhas com specs)
+  - Instrucao de emojis (alta: usar livremente, moderada: max 3, baixa: max 1)
+  - Se `show_installments` for true, destacar parcelamento; se false, omitir
+- A instrucao "NAO inclua links ou URLs" ja existe e sera mantida
 
-Nenhuma mudanca de schema e necessaria -- todos os campos ja existem na tabela `whatsapp_groups`.
+**Nao alterar mecanismo de link:**
+- O link ja e concatenado programaticamente no `process-automations` (linha 331)
+- O `generate-promo-message` ja instrui a IA a nao gerar links
+- Nenhuma mudanca necessaria neste ponto
+
+---
+
+### Arquivos modificados
+
+1. `src/components/automations/AutomationRuleModal.tsx` -- UI completa
+2. `supabase/functions/process-automations/index.ts` -- broadcast multi-grupo + message_config
+3. `supabase/functions/generate-promo-message/index.ts` -- novo modo broadcast com message_config
+
+### Nenhuma migracao de schema necessaria
+
+As colunas `target_categories` e `message_config` ja existem na tabela `automation_rules`.
