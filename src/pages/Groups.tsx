@@ -137,8 +137,8 @@ export default function Groups() {
           <div className="hidden items-center gap-6 md:flex">
             <button onClick={() => navigate("/")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Início</button>
             <a href="/#tecnologia" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Tecnologia</a>
-            <button className="text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5">Grupos</button>
             <a href="/#confianca" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Segurança</a>
+            <button className="text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5">Grupos</button>
           </div>
           <Button size="sm" variant="outline" className="border-secondary/30 text-secondary hover:bg-secondary/10" onClick={() => navigate("/admin")}>
             Entrar
