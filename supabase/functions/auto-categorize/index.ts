@@ -17,7 +17,70 @@ const BASE_CATEGORIES = [
   "Beleza e Perfumaria",
   "Moda",
   "Outros",
+  "Automotivo",
+  "Áudio",
+  "Bebê",
+  "Brinquedos",
+  "Cama Mesa e Banho",
+  "Colchões",
+  "Esporte e Lazer",
+  "Ferramentas",
+  "Games",
+  "Leitores Digitais",
+  "Livros",
+  "Malas e Acessórios",
+  "Mercado",
+  "Papelaria",
+  "Produtos de Limpeza",
+  "Saúde e Cuidados Pessoais",
+  "Smartwatches",
+  "Suplementos Alimentares",
+  "Utilidades Domésticas",
+  "Alimentos e Bebidas",
+  "Segurança Eletrônica",
+  "Ar e Ventilação",
+  "Drones",
+  "Itens para Pet",
+  "Shopee Geral",
+  "Amazon Ofertas",
 ];
+
+// Mapa de aliases: variações conhecidas -> categoria canônica
+const CATEGORY_ALIASES: Record<string, string> = {
+  "Bebês": "Bebê",
+  "Móveis": "Casa e Móveis",
+  "Casa E Móveis": "Casa e Móveis",
+  "Casa E Construção": "Casa e Móveis",
+  "Casa e Construção": "Casa e Móveis",
+  "Eletrônicos": "Informática",
+  "Acessórios Automotivos": "Automotivo",
+  "Alimentos": "Alimentos e Bebidas",
+  "Alimentos E Bebidas": "Alimentos e Bebidas",
+  "Câmeras E Segurança": "Segurança Eletrônica",
+  "Camping E Lazer": "Esporte e Lazer",
+  "Esporte E Lazer": "Esporte e Lazer",
+  "Higiene Pessoal": "Saúde e Cuidados Pessoais",
+  "Saúde E Cuidados Pessoais": "Saúde e Cuidados Pessoais",
+  "Limpeza E Lavanderia": "Produtos de Limpeza",
+  "Produtos De Limpeza": "Produtos de Limpeza",
+  "Fones De Ouvido": "Áudio",
+  "Fones de Ouvido": "Áudio",
+  "Beleza E Perfumaria": "Beleza e Perfumaria",
+  "Tv E Vídeo": "TV e Vídeo",
+  "TV E Vídeo": "TV e Vídeo",
+  "Cama, Mesa E Banho": "Cama Mesa e Banho",
+  "Cama Mesa E Banho": "Cama Mesa e Banho",
+  "Malas E Acessórios": "Malas e Acessórios",
+  "Ar E Ventilação": "Ar e Ventilação",
+  "Itens Para Pet": "Itens para Pet",
+  "Jogos E Brinquedos": "Brinquedos",
+};
+
+// Normaliza uma categoria usando o mapa de aliases
+const normalizeCategory = (cat: string): string => {
+  const trimmed = cat.trim();
+  return CATEGORY_ALIASES[trimmed] ?? trimmed;
+};
 
 // Capitalize words, but keep small words (e, de, da, do) lowercase, EXCEPT TV
 const titleCase = (s: string) => {
@@ -27,14 +90,10 @@ const titleCase = (s: string) => {
     .toLowerCase()
     .split(" ")
     .map((word, index) => {
-      // Exceção especial para "TV" (sempre maiúsculo)
       if (word === "tv") return "TV";
-
-      // Se for uma palavra de ligação e não for a primeira palavra, mantém minúscula
       if (smallWords.includes(word) && index !== 0) {
         return word;
       }
-      // Caso contrário, capitaliza a primeira letra
       return word.charAt(0).toUpperCase() + word.slice(1);
     })
     .join(" ");
@@ -60,33 +119,30 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Instancia o Supabase no início para podermos ler as categorias existentes
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Busca os últimos 2000 produtos para descobrir quais categorias já existem no banco
+    // Use only BASE_CATEGORIES (already comprehensive) + any novel ones from DB
     const { data: recentScrapes } = await supabase
       .from("raw_scrapes")
       .select("metadata")
       .order("created_at", { ascending: false })
       .limit(2000);
 
-    // 2. Cria um Set (lista sem repetições) unindo as BASE_CATEGORIES com as do banco
     const dynamicCategories = new Set<string>(BASE_CATEGORIES);
     recentScrapes?.forEach((row) => {
       const meta = row.metadata as Record<string, unknown> | null;
       if (meta && typeof meta.categoria === "string" && meta.categoria.trim() !== "") {
-        dynamicCategories.add(titleCase(meta.categoria.trim()));
+        const normalized = normalizeCategory(titleCase(meta.categoria.trim()));
+        dynamicCategories.add(normalized);
       }
     });
 
     const existingCategoriesList = Array.from(dynamicCategories).join(", ");
 
-    // Build numbered list of titles
     const numberedList = products.map((p, i) => `${i + 1}. ${p.product_title}`).join("\n");
 
-    // PROMPT ATUALIZADO: Mais rigoroso e alimentado com o banco de dados em tempo real
     const systemPrompt = `Você é um assistente de e-commerce. Vou te enviar uma lista numerada de títulos de produtos. Para cada um, classifique-o em uma categoria de e-commerce adequada.
 
 CATEGORIAS JÁ EXISTENTES NO SISTEMA:
@@ -137,7 +193,6 @@ Responda APENAS com o número e a categoria correspondente, uma por linha. Exemp
     const data = await response.json();
     const aiText = data.choices?.[0]?.message?.content?.trim() ?? "";
 
-    // Parse response lines: "N. Category"
     const lines = aiText.split("\n").filter((l: string) => l.trim());
     const categoryMap = new Map<number, string>();
 
@@ -146,7 +201,8 @@ Responda APENAS com o número e a categoria correspondente, uma por linha. Exemp
       if (match) {
         const idx = parseInt(match[1]) - 1;
         const rawCat = match[2].trim();
-        const category = rawCat.length > 0 ? titleCase(rawCat) : "Outros";
+        // Apply titleCase then normalize through aliases
+        const category = rawCat.length > 0 ? normalizeCategory(titleCase(rawCat)) : "Outros";
         categoryMap.set(idx, category);
       }
     }
