@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,26 @@ function MaterialIcon({ name, className }: { name: string; className?: string })
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [activeSection, setActiveSection] = useState("inicio");
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const techSection = document.getElementById("tecnologia");
+      const trustSection = document.getElementById("confianca");
+
+      if (trustSection && scrollY >= trustSection.offsetTop - 150) {
+        setActiveSection("confianca");
+      } else if (techSection && scrollY >= techSection.offsetTop - 150) {
+        setActiveSection("tecnologia");
+      } else {
+        setActiveSection("inicio");
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans antialiased overflow-x-hidden">
@@ -78,10 +99,10 @@ export default function LandingPage() {
             <span className="text-lg font-bold">Radar das Promos</span>
           </button>
           <div className="hidden items-center gap-6 md:flex">
-            <a href="/" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Início</a>
-            <a href="#tecnologia" className="text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5">Tecnologia</a>
+            <a href="/" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={activeSection === "inicio" ? "text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5" : "text-sm text-muted-foreground hover:text-foreground transition-colors"}>Início</a>
+            <a href="#tecnologia" className={activeSection === "tecnologia" ? "text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5" : "text-sm text-muted-foreground hover:text-foreground transition-colors"}>Tecnologia</a>
             <button onClick={() => navigate("/grupos")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Grupos</button>
-            <a href="#confianca" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Segurança</a>
+            <a href="#confianca" className={activeSection === "confianca" ? "text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5" : "text-sm text-muted-foreground hover:text-foreground transition-colors"}>Segurança</a>
           </div>
           <Button size="sm" variant="outline" className="border-secondary/30 text-secondary hover:bg-secondary/10" onClick={() => navigate("/admin")}>
             Entrar
