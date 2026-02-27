@@ -19,15 +19,103 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    const body = await req.json();
+    const { action } = body;
+
+    // ===== CRON SYNC ALL =====
+    if (action === "cron_sync_all") {
+      console.log("cron_sync_all: starting global sync");
+
+      // Fetch all active evolution configs
+      const { data: configs, error: configsError } = await adminClient
+        .from("evolution_config")
+        .select("*")
+        .eq("is_active", true);
+
+      if (configsError || !configs) {
+        console.error("cron_sync_all: failed to fetch configs", configsError);
+        return jsonResponse({ success: false, message: "Failed to fetch configs" }, 500);
+      }
+
+      let totalUsersProcessed = 0;
+      let totalGroupsUpdated = 0;
+      const errors: string[] = [];
+
+      for (const config of configs) {
+        try {
+          const baseUrl = config.api_url.replace(/\/+$/, "");
+          const instanceName = config.session_name;
+          const apiHeaders = { apikey: config.api_key, "Content-Type": "application/json" };
+          const userId = config.user_id;
+
+          const url = `${baseUrl}/group/fetchAllGroups/${instanceName}?getParticipants=false`;
+          const res = await fetch(url, { headers: apiHeaders });
+          if (!res.ok) {
+            errors.push(`User ${userId}: API error ${res.status}`);
+            continue;
+          }
+
+          let apiGroups: any[];
+          try { apiGroups = await res.json(); } catch { apiGroups = []; }
+          if (!Array.isArray(apiGroups)) apiGroups = Object.values(apiGroups);
+
+          const { data: dbGroups } = await adminClient
+            .from("whatsapp_groups")
+            .select("id, group_id, max_participants")
+            .eq("user_id", userId);
+
+          if (!dbGroups || dbGroups.length === 0) {
+            totalUsersProcessed++;
+            continue;
+          }
+
+          const sizeMap = new Map<string, number>();
+          for (const ag of apiGroups) {
+            const jid = ag.id || ag.jid;
+            const size = ag.size ?? ag.participants?.length ?? 0;
+            if (jid) sizeMap.set(jid, size);
+          }
+
+          let updated = 0;
+          for (const dbg of dbGroups) {
+            const size = sizeMap.get(dbg.group_id);
+            if (size === undefined) continue;
+            const maxP = dbg.max_participants || 1024;
+            const isFull = size >= maxP;
+            const { error } = await adminClient
+              .from("whatsapp_groups")
+              .update({ participant_count: size, is_full: isFull, updated_at: new Date().toISOString() })
+              .eq("id", dbg.id);
+            if (!error) updated++;
+          }
+
+          totalGroupsUpdated += updated;
+          totalUsersProcessed++;
+          console.log(`cron_sync_all: user ${userId} - ${updated} groups updated`);
+        } catch (e) {
+          errors.push(`User ${config.user_id}: ${(e as Error).message}`);
+        }
+      }
+
+      console.log(`cron_sync_all: done. Users: ${totalUsersProcessed}, Groups: ${totalGroupsUpdated}, Errors: ${errors.length}`);
+      return jsonResponse({
+        success: true,
+        users_processed: totalUsersProcessed,
+        groups_updated: totalGroupsUpdated,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    }
+
+    // === Auth required for all other actions ===
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -35,10 +123,7 @@ Deno.serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
     if (claimsError || !claimsData?.claims) return jsonResponse({ error: "Unauthorized" }, 401);
-    const user = { id: claimsData.claims.sub as string };
-    const userId = user.id;
-
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const userId = claimsData.claims.sub as string;
 
     // Get Evolution config
     const { data: config, error: configError } = await adminClient
@@ -56,9 +141,6 @@ Deno.serve(async (req) => {
     const instanceName = config.session_name;
     const apiHeaders = { apikey: config.api_key, "Content-Type": "application/json" };
 
-    const body = await req.json();
-    const { action } = body;
-
     // ===== SYNC COUNTS =====
     if (action === "sync_counts") {
       const url = `${baseUrl}/group/fetchAllGroups/${instanceName}?getParticipants=false`;
@@ -73,7 +155,6 @@ Deno.serve(async (req) => {
       try { apiGroups = JSON.parse(resText); } catch { apiGroups = []; }
       if (!Array.isArray(apiGroups)) apiGroups = Object.values(apiGroups);
 
-      // Get user's groups from DB
       const { data: dbGroups } = await adminClient
         .from("whatsapp_groups")
         .select("id, group_id, max_participants")
@@ -83,7 +164,6 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: true, updated: 0, message: "Nenhum grupo no banco" });
       }
 
-      // Build a map: group_id (JID) -> api size
       const sizeMap = new Map<string, number>();
       for (const ag of apiGroups) {
         const jid = ag.id || ag.jid;
@@ -114,7 +194,6 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "name e admin_number são obrigatórios" }, 400);
       }
 
-      // Create group via Evolution API
       const createRes = await fetch(`${baseUrl}/group/create/${instanceName}`, {
         method: "POST",
         headers: apiHeaders,
@@ -133,7 +212,6 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: false, message: "Não foi possível obter o JID do grupo criado" }, 500);
       }
 
-      // Get invite code
       let inviteLink = "";
       try {
         const inviteRes = await fetch(
@@ -147,7 +225,6 @@ Deno.serve(async (req) => {
         console.log("Failed to get invite code:", (e as Error).message);
       }
 
-      // Insert into DB
       const { data: inserted, error: insertError } = await adminClient
         .from("whatsapp_groups")
         .insert({
@@ -170,7 +247,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, group: inserted, message: "Grupo criado com sucesso!" });
     }
 
-    return jsonResponse({ error: "Ação inválida. Use: sync_counts, create" }, 400);
+    return jsonResponse({ error: "Ação inválida. Use: sync_counts, create, cron_sync_all" }, 400);
   } catch (e) {
     console.error("manage-whatsapp-groups error:", e);
     return jsonResponse({ error: (e as Error).message }, 500);
