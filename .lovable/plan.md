@@ -1,58 +1,61 @@
 
 
-## Refatorar Motor para Batching + Watchdog de 45s
+## Corrigir Contadores e Watchdog do Motor
 
-### Resumo
+### Problema 1: Contadores misturam produtos com grupos
 
-Tres alteracoes cirurgicas no `process-automations/index.ts` para garantir que o motor nunca ultrapasse o tempo limite da Edge Function:
+O contador `sent` incrementa **por grupo enviado** (linha 431), nao por produto. Resultado: 1 produto enviado a 3 grupos aparece como "3 enviado(s)" no resumo, quando deveria ser "1 produto(s) enviado(s) para 3 grupo(s)".
 
----
+**Solucao:** Separar contadores de produto dos contadores de grupo.
 
-### 1. Batch Size -- `.limit(5)`
+- Adicionar `productsSent`, `productsSkipped`, `productsErrors` para rastrear produtos
+- Manter `sent` (renomear para `groupsSentTotal`) para rastrear envios por grupo
+- Incrementar `productsSent` uma vez por scrape processado com sucesso (apos o broadcast loop)
+- Atualizar o log final para mostrar: `"1 produto(s) enviado(s) para 3 grupo(s), 4 ignorado(s)"`
 
-**Linha 96** -- Adicionar `.limit(5)` na query de scrapes pendentes:
+### Problema 2: Watchdog nao protege dentro do broadcast loop
 
-```text
-// DE:
-admin.from("raw_scrapes").select("*").eq("status", "pending")
+O check de timeout (linha 180) so executa no inicio de cada iteracao do loop de scrapes. Se um unico scrape demora 80s (geracao IA + 3 grupos x 8s delay), o watchdog nao interrompe.
 
-// PARA:
-admin.from("raw_scrapes").select("*").eq("status", "pending").limit(5)
-```
-
-Isto garante que cada execucao processa no maximo 5 produtos. Os restantes ficam com status `pending` e serao apanhados na proxima execucao.
-
----
-
-### 2. Watchdog -- 45 segundos
-
-**Linha 175** -- Reduzir o timeout de 120s para 45s:
+**Solucao:** Adicionar verificacao de timeout dentro do broadcast loop (antes de enviar para cada grupo):
 
 ```text
-// DE:
-const MAX_EXECUTION_MS = 120_000; // 120s safety margin
-
-// PARA:
-const MAX_EXECUTION_MS = 45_000; // 45s safety -- well within Edge Function limit
+for (const group of targetGroups) {
+  if (Date.now() - startTime > MAX_EXECUTION_MS) {
+    timedOut = true;
+    break; // Sai do broadcast loop
+  }
+  // ... envio existente
+}
 ```
 
-O guard ja existe no loop (linha 180) e faz `break` quando o tempo e excedido. Apenas precisamos baixar o valor para 45s.
+### Alteracoes no ficheiro
 
----
+`supabase/functions/process-automations/index.ts`:
 
-### 3. Tratamento Individual de Erros
+1. **Linhas 170-172** -- Adicionar contadores de produto:
+   - `let productsSent = 0;`
+   - `let productsSkipped = 0;`
+   - `let productsErrors = 0;`
 
-O try/catch por scrape **ja existe** (linhas 309-499). Cada produto e processado individualmente -- se a IA ou o WhatsApp falhar para um produto, o erro e registado no log e o loop continua para o proximo. Nenhuma alteracao necessaria aqui.
+2. **Linha 242 (skipped)** -- Adicionar `productsSkipped++` junto ao `skipped++` existente
 
-O try/catch por grupo dentro do broadcast loop **tambem ja existe** (linhas 398-450).
+3. **Linha 387-396 (broadcast loop)** -- Adicionar check de timeout antes de cada envio de grupo
 
----
+4. **Linha 431** -- Manter `sent++` como contagem de grupos, mas adicionar `productsSent++` apos o broadcast loop (linha ~475, antes do update de status)
 
-### Ficheiro modificado
+5. **Linhas 481-499 (catch do scrape)** -- Adicionar `productsErrors++`
 
-- `supabase/functions/process-automations/index.ts` -- 2 alteracoes de linha (limit + timeout)
+6. **Linha 509 (log final)** -- Alterar mensagem para:
+   `"Motor finalizado em Xs: Y produto(s) -> Z grupo(s), W ignorado(s), E erro(s)"`
+
+7. **Linhas 510-519 (metadata final)** -- Adicionar `products_sent`, `products_skipped`, `products_errors`, `groups_sent_total`
+
+8. **Linhas 522-528 (motor_control update)** -- Usar `productsSent` e `productsSkipped` nos campos `last_run_sent` e `last_run_skipped`
 
 ### Resultado esperado
 
-O motor vai processar lotes de 5 produtos por execucao, com um limite de 45s. Se um Cron Job chamar a funcao a cada minuto, processara ate 5 produtos/minuto de forma segura, sem timeouts.
+- Log claro: "Motor finalizado em 30s: 1 produto(s) -> 3 grupo(s), 4 ignorado(s), 0 erro(s)"
+- Watchdog protege mesmo dentro do broadcast de um unico produto
+- Contadores em `motor_control` refletem produtos, nao grupos
 
