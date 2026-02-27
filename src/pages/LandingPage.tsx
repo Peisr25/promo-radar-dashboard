@@ -117,7 +117,7 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-4 flex w-full flex-col items-center justify-center gap-4 sm:flex-row">
-              <button className="group flex w-full items-center justify-center gap-3 rounded-xl bg-[#25D366] px-8 py-4 text-base font-semibold text-white shadow-lg shadow-green-900/20 transition-all hover:bg-[#1da851] sm:w-auto">
+              <button onClick={() => navigate("/grupos")} className="group flex w-full items-center justify-center gap-3 rounded-xl bg-[#25D366] px-8 py-4 text-base font-semibold text-white shadow-lg shadow-green-900/20 transition-all hover:bg-[#1da851] sm:w-auto">
                 <MaterialIcon name="chat" className="text-xl" />
                 Entrar no Grupo VIP
                 <MaterialIcon name="arrow_forward" className="text-sm opacity-70 transition-transform group-hover:translate-x-1" />
@@ -287,7 +287,7 @@ export default function LandingPage() {
                 <p className="max-w-xl text-lg text-muted-foreground">
                   Junte-se ao grupo VIP gratuitamente e nunca mais pague o preço cheio em tecnologia.
                 </p>
-                <button className="flex items-center gap-3 rounded-xl bg-[#25D366] px-10 py-4 text-lg font-bold text-white transition-all hover:bg-[#1da851] hover:shadow-lg hover:shadow-green-500/20">
+                <button onClick={() => navigate("/grupos")} className="flex items-center gap-3 rounded-xl bg-[#25D366] px-10 py-4 text-lg font-bold text-white transition-all hover:bg-[#1da851] hover:shadow-lg hover:shadow-green-500/20">
                   <MaterialIcon name="rocket_launch" />
                   Entrar no Grupo VIP
                 </button>
