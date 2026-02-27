@@ -432,10 +432,15 @@ export default function WhatsAppSettings() {
       toast({ title: "Informe o número do admin", variant: "destructive" });
       return;
     }
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
     setSeedingGroups(true);
     let success = 0;
     let fail = 0;
-    for (const g of SEED_GROUPS) {
+    const total = SEED_GROUPS.length;
+    const toastId = toast({ title: `Criando grupo 1 de ${total}... (${SEED_GROUPS[0].name})`, duration: 999999 });
+    for (let i = 0; i < total; i++) {
+      const g = SEED_GROUPS[i];
+      toastId.update({ id: toastId.id, title: `Criando grupo ${i + 1} de ${total}...`, description: g.name });
       const { data, error } = await supabase.functions.invoke("manage-whatsapp-groups", {
         body: {
           action: "create",
@@ -447,11 +452,13 @@ export default function WhatsAppSettings() {
       });
       if (error || !data?.success) fail++;
       else success++;
+      if (i < total - 1) await delay(8000);
     }
+    toastId.dismiss();
     setSeedingGroups(false);
     setSeedDialogOpen(false);
     setSeedAdminNumber("");
-    toast({ title: `${success} grupo(s) criado(s), ${fail} falha(s).` });
+    toast({ title: `✅ ${success} grupo(s) criado(s), ${fail} falha(s).` });
     loadGroups();
   };
 
