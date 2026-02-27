@@ -161,7 +161,7 @@ export default function LandingPage() {
         </section>
 
         {/* ─── TECH PIPELINE ─── */}
-        <section id="tecnologia" className="mb-32 px-4 md:px-6">
+        <section id="tecnologia" className="mb-32 px-4 md:px-6 scroll-mt-24">
           <div className="mx-auto max-w-7xl">
             <div className="mb-16 text-center">
               <h2 className="mb-4 text-3xl font-bold md:text-4xl">Tecnologia a favor do seu bolso</h2>
