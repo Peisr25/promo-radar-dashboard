@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, CheckCircle, XCircle, Plus, Trash2, RefreshCw, Pencil,
-  Zap, Link2, Copy, RotateCcw, Users, Sparkles,
+  Zap, Link2, Copy, RotateCcw, Users, Sparkles, FileText,
 } from "lucide-react";
 import {
   testEvolutionConnection,
@@ -87,6 +87,12 @@ export default function WhatsAppSettings() {
   const [bulkNichosOpen, setBulkNichosOpen] = useState(false);
   const [bulkCategories, setBulkCategories] = useState<string[]>([]);
   const [bulkSaving, setBulkSaving] = useState(false);
+
+  // Bulk edit descriptions modal
+  const [bulkDescOpen, setBulkDescOpen] = useState(false);
+  const [bulkDescText, setBulkDescText] = useState("");
+  const [bulkDescSaving, setBulkDescSaving] = useState(false);
+  const [bulkDescProgress, setBulkDescProgress] = useState({ current: 0, total: 0, success: 0, fail: 0 });
 
   // Seed groups
   const [seedDialogOpen, setSeedDialogOpen] = useState(false);
@@ -331,6 +337,55 @@ export default function WhatsAppSettings() {
     setBulkSaving(false);
     setBulkNichosOpen(false);
     toast({ title: `Nichos atualizados em ${selectedIds.size} grupo(s)!` });
+    loadGroups();
+  };
+
+  // ---------------------------------------------------------------------------
+  // Bulk Edit Descriptions
+  // ---------------------------------------------------------------------------
+  const openBulkDesc = async () => {
+    if (!user) return;
+    // Load default description from settings
+    const { data } = await supabase.from("settings").select("default_group_description").eq("user_id", user.id).maybeSingle();
+    setBulkDescText((data as any)?.default_group_description ?? "");
+    setBulkDescProgress({ current: 0, total: 0, success: 0, fail: 0 });
+    setBulkDescOpen(true);
+  };
+
+  const saveBulkDescriptions = async () => {
+    if (selectedIds.size === 0 || !bulkDescText.trim()) return;
+    setBulkDescSaving(true);
+    const ids = Array.from(selectedIds);
+    const total = ids.length;
+    let success = 0;
+    let fail = 0;
+    setBulkDescProgress({ current: 0, total, success: 0, fail: 0 });
+
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    for (let i = 0; i < total; i++) {
+      const group = groups.find((g) => g.id === ids[i]);
+      if (!group) { fail++; continue; }
+
+      setBulkDescProgress({ current: i + 1, total, success, fail });
+
+      const result = await updateGroupDescription(group.group_id, bulkDescText);
+      if (result.success) {
+        await supabase.from("whatsapp_groups").update({
+          group_description: bulkDescText,
+          updated_at: new Date().toISOString(),
+        }).eq("id", group.id);
+        success++;
+      } else {
+        fail++;
+      }
+      setBulkDescProgress({ current: i + 1, total, success, fail });
+
+      if (i < total - 1) await delay(2000);
+    }
+
+    setBulkDescSaving(false);
+    toast({ title: `✅ ${success} descrição(ões) atualizada(s), ${fail} falha(s).` });
     loadGroups();
   };
 
@@ -602,6 +657,9 @@ export default function WhatsAppSettings() {
                 </Button>
                 <Button variant="outline" size="sm" onClick={bulkToggleFlash}>
                   <Zap className="mr-1 h-3.5 w-3.5" /> Flash Deals
+                </Button>
+                <Button variant="outline" size="sm" onClick={openBulkDesc}>
+                  <FileText className="mr-1 h-3.5 w-3.5" /> Alterar Descrições
                 </Button>
               </div>
             </div>
@@ -882,6 +940,40 @@ export default function WhatsAppSettings() {
             <Button variant="outline" onClick={() => setBulkNichosOpen(false)}>Cancelar</Button>
             <Button onClick={saveBulkNichos} disabled={bulkSaving}>
               {bulkSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Aplicar a {selectedIds.size} grupo(s)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Descriptions Modal */}
+      <Dialog open={bulkDescOpen} onOpenChange={(open) => { if (!bulkDescSaving) setBulkDescOpen(open); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Alterar Descrições em Massa</DialogTitle>
+            <DialogDescription>
+              A descrição abaixo será aplicada a {selectedIds.size} grupo(s) selecionado(s) via WhatsApp API.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            rows={14}
+            value={bulkDescText}
+            onChange={(e) => setBulkDescText(e.target.value)}
+            placeholder="Descrição dos grupos..."
+            disabled={bulkDescSaving}
+          />
+          {bulkDescSaving && bulkDescProgress.total > 0 && (
+            <div className="space-y-2">
+              <Progress value={(bulkDescProgress.current / bulkDescProgress.total) * 100} className="h-2" />
+              <p className="text-xs text-muted-foreground text-center">
+                {bulkDescProgress.current} de {bulkDescProgress.total} — ✅ {bulkDescProgress.success} | ❌ {bulkDescProgress.fail}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDescOpen(false)} disabled={bulkDescSaving}>Cancelar</Button>
+            <Button onClick={saveBulkDescriptions} disabled={bulkDescSaving || !bulkDescText.trim()}>
+              {bulkDescSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Aplicar a {selectedIds.size} grupo(s)
             </Button>
           </DialogFooter>

@@ -379,6 +379,7 @@ export type Database = {
         Row: {
           affiliate_tags: Json | null
           created_at: string
+          default_group_description: string | null
           default_system_prompt: string | null
           gemini_api_key: string | null
           id: string
@@ -389,6 +390,7 @@ export type Database = {
         Insert: {
           affiliate_tags?: Json | null
           created_at?: string
+          default_group_description?: string | null
           default_system_prompt?: string | null
           gemini_api_key?: string | null
           id?: string
@@ -399,6 +401,7 @@ export type Database = {
         Update: {
           affiliate_tags?: Json | null
           created_at?: string
+          default_group_description?: string | null
           default_system_prompt?: string | null
           gemini_api_key?: string | null
           id?: string

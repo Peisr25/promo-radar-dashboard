@@ -19,6 +19,7 @@ export default function SettingsPage() {
     magalu_id: "",
     amazon_tag: "",
     whatsapp_groups: "",
+    default_group_description: "",
   });
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export default function SettingsPage() {
           magalu_id: tags.magalu_id ?? "",
           amazon_tag: tags.amazon_tag ?? "",
           whatsapp_groups: groups,
+          default_group_description: (data as any).default_group_description ?? "",
         });
       }
       setLoading(false);
@@ -50,6 +52,7 @@ export default function SettingsPage() {
       default_system_prompt: form.default_system_prompt,
       affiliate_tags: { magalu_id: form.magalu_id, amazon_tag: form.amazon_tag },
       whatsapp_groups: form.whatsapp_groups.split(",").map((s) => s.trim()).filter(Boolean),
+      default_group_description: form.default_group_description || null,
     };
 
     const { error } = await supabase.from("settings").upsert(payload, { onConflict: "user_id" });
@@ -101,6 +104,16 @@ export default function SettingsPage() {
           <div>
             <label className="mb-1 block text-sm text-muted-foreground">Grupos de Destino (separados por vírgula)</label>
             <Input placeholder="Ex: Promos VIP, Ofertas Tech" value={form.whatsapp_groups} onChange={(e) => setForm({ ...form, whatsapp_groups: e.target.value })} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Descrição Padrão dos Grupos</CardTitle></CardHeader>
+        <CardContent>
+          <div>
+            <label className="mb-1 block text-sm text-muted-foreground">Texto padrão para descrição dos grupos WhatsApp (usado na edição em massa)</label>
+            <Textarea rows={14} value={form.default_group_description} onChange={(e) => setForm({ ...form, default_group_description: e.target.value })} placeholder="Seja bem-vindo(a) ao Radar das Promos! 🎯..." />
           </div>
         </CardContent>
       </Card>
