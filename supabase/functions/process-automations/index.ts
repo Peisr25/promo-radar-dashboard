@@ -342,12 +342,20 @@ Deno.serve(async (req) => {
           generateBody.tone = opts.tone ?? "funny";
         }
 
-        // Call generate-promo-message (generate 1x)
-        const genRes = await fetch(`${supabaseUrl}/functions/v1/generate-promo-message`, {
-          method: "POST",
-          headers: { Authorization: authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify(generateBody),
-        });
+        // Call generate-promo-message (generate 1x) with 30s timeout
+        const aiAbort = new AbortController();
+        const aiTimeout = setTimeout(() => aiAbort.abort(), 30_000);
+        let genRes: Response;
+        try {
+          genRes = await fetch(`${supabaseUrl}/functions/v1/generate-promo-message`, {
+            method: "POST",
+            headers: { Authorization: authHeader, "Content-Type": "application/json" },
+            body: JSON.stringify(generateBody),
+            signal: aiAbort.signal,
+          });
+        } finally {
+          clearTimeout(aiTimeout);
+        }
 
         if (!genRes.ok) {
           const errText = await genRes.text();
