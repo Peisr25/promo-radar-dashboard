@@ -171,9 +171,23 @@ Deno.serve(async (req) => {
     let errors = 0;
     let skipped = 0;
     let rateLimited = false;
+    let timedOut = false;
+    const MAX_EXECUTION_MS = 120_000; // 120s safety margin (Edge Function timeout ~150s)
 
     // Phase 2 & 3 — Match & Execute (Broadcast)
     for (const scrape of scrapes) {
+      // Timeout guard — stop before Edge Function is killed
+      if (Date.now() - startTime > MAX_EXECUTION_MS) {
+        timedOut = true;
+        await admin.from("automation_logs").insert({
+          user_id: userId,
+          status: "skipped",
+          message: `Tempo limite atingido (~${Math.round((Date.now() - startTime) / 1000)}s). ${scrapes.length - sent - errors - skipped} produto(s) restante(s) para a próxima execução.`,
+          metadata: { type: "timeout", processed: sent + errors + skipped, remaining: scrapes.length - sent - errors - skipped },
+        });
+        break;
+      }
+
       // Kill switch check
       const { data: ctrl } = await admin
         .from("motor_control")
@@ -492,7 +506,7 @@ Deno.serve(async (req) => {
     await admin.from("automation_logs").insert({
       user_id: userId,
       status: sent > 0 ? "success" : "skipped",
-      message: `Motor finalizado em ${durationSec}s: ${sent} enviado(s), ${skipped} ignorado(s), ${errors} erro(s)${rateLimited ? " [LIMITE ATINGIDO]" : ""}`,
+      message: `Motor finalizado em ${durationSec}s: ${sent} enviado(s), ${skipped} ignorado(s), ${errors} erro(s)${rateLimited ? " [LIMITE ATINGIDO]" : ""}${timedOut ? " [TIMEOUT - restantes pendentes]" : ""}`,
       metadata: {
         type: "motor_end",
         sent,
@@ -501,6 +515,7 @@ Deno.serve(async (req) => {
         duration_seconds: durationSec,
         total_processed: scrapes.length,
         rate_limited: rateLimited,
+        timed_out: timedOut,
       },
     });
 
