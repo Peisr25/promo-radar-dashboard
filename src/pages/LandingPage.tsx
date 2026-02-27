@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,16 @@ function MaterialIcon({ name, className }: { name: string; className?: string })
 export default function LandingPage() {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState("inicio");
+  const channelsRef = useRef<HTMLDivElement>(null);
+
+  const scrollChannels = (direction: "left" | "right") => {
+    if (!channelsRef.current) return;
+    const scrollAmount = 360;
+    channelsRef.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -227,16 +237,16 @@ export default function LandingPage() {
                 <p className="text-muted-foreground">Entre nos ecossistemas que mais te interessam.</p>
               </div>
               <div className="hidden gap-2 sm:flex">
-                <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/20 text-muted-foreground transition-colors hover:bg-card/20 hover:text-foreground">
+                <button onClick={() => scrollChannels("left")} className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/20 text-muted-foreground transition-colors hover:bg-card/20 hover:text-foreground">
                   <MaterialIcon name="chevron_left" />
                 </button>
-                <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/20 text-muted-foreground transition-colors hover:bg-card/20 hover:text-foreground">
+                <button onClick={() => scrollChannels("right")} className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/20 text-muted-foreground transition-colors hover:bg-card/20 hover:text-foreground">
                   <MaterialIcon name="chevron_right" />
                 </button>
               </div>
             </div>
 
-            <div className="flex gap-6 overflow-x-auto pb-4 snap-x" style={{ scrollbarWidth: "none" }}>
+            <div ref={channelsRef} className="flex gap-6 overflow-x-auto pb-4 snap-x" style={{ scrollbarWidth: "none" }}>
               {channels.map((ch) => (
                 <div
                   key={ch.title}
