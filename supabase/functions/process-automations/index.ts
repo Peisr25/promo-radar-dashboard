@@ -167,9 +167,12 @@ Deno.serve(async (req) => {
       },
     });
 
-    let sent = 0;
-    let errors = 0;
-    let skipped = 0;
+    let sent = 0; // group-level sends
+    let errors = 0; // group-level errors
+    let skipped = 0; // product-level skips (legacy, kept for compat)
+    let productsSent = 0;
+    let productsSkipped = 0;
+    let productsErrors = 0;
     let rateLimited = false;
     let timedOut = false;
     const MAX_EXECUTION_MS = 45_000; // 45s safety — well within Edge Function limit
@@ -243,6 +246,7 @@ Deno.serve(async (req) => {
       if (!matchedRule) {
         await admin.from("raw_scrapes").update({ status: "skipped" }).eq("id", scrape.id);
         skipped++;
+        productsSkipped++;
         continue;
       }
 
@@ -284,6 +288,7 @@ Deno.serve(async (req) => {
         });
         await admin.from("raw_scrapes").update({ status: "skipped" }).eq("id", scrape.id);
         skipped++;
+        productsSkipped++;
         continue;
       }
 
@@ -385,6 +390,11 @@ Deno.serve(async (req) => {
         let groupErrors = 0;
 
         for (const group of targetGroups) {
+          // Watchdog inside broadcast loop
+          if (Date.now() - startTime > MAX_EXECUTION_MS) {
+            timedOut = true;
+            break;
+          }
           // Rate limit re-check per group send
           if (maxPerHour > 0 && (sentLastHour + sent) >= maxPerHour) {
             rateLimited = true;
@@ -473,6 +483,7 @@ Deno.serve(async (req) => {
         }
 
         await admin.from("raw_scrapes").update({ status: "published" }).eq("id", scrape.id);
+        if (groupsSent > 0) productsSent++;
 
         // Anti-spam delay before next scrape
         if (scrapes.indexOf(scrape) < scrapes.length - 1) {
@@ -480,6 +491,7 @@ Deno.serve(async (req) => {
         }
       } catch (e) {
         errors++;
+        productsErrors++;
         const errorMsg = e instanceof Error ? e.message : "Erro desconhecido";
         console.error(`Error processing scrape ${scrape.id}:`, errorMsg);
 
@@ -505,13 +517,15 @@ Deno.serve(async (req) => {
     // Log motor completion summary
     await admin.from("automation_logs").insert({
       user_id: userId,
-      status: sent > 0 ? "success" : "skipped",
-      message: `Motor finalizado em ${durationSec}s: ${sent} enviado(s), ${skipped} ignorado(s), ${errors} erro(s)${rateLimited ? " [LIMITE ATINGIDO]" : ""}${timedOut ? " [TIMEOUT - restantes pendentes]" : ""}`,
+      status: productsSent > 0 ? "success" : "skipped",
+      message: `Motor finalizado em ${durationSec}s: ${productsSent} produto(s) -> ${sent} grupo(s), ${productsSkipped} ignorado(s), ${productsErrors} erro(s)${rateLimited ? " [LIMITE ATINGIDO]" : ""}${timedOut ? " [TIMEOUT - restantes pendentes]" : ""}`,
       metadata: {
         type: "motor_end",
-        sent,
+        products_sent: productsSent,
+        products_skipped: productsSkipped,
+        products_errors: productsErrors,
+        groups_sent_total: sent,
         errors,
-        skipped,
         duration_seconds: durationSec,
         total_processed: scrapes.length,
         rate_limited: rateLimited,
@@ -523,9 +537,9 @@ Deno.serve(async (req) => {
       is_running: false,
       updated_at: new Date().toISOString(),
       last_run_at: new Date().toISOString(),
-      last_run_sent: sent,
-      last_run_errors: errors,
-      last_run_skipped: skipped,
+      last_run_sent: productsSent,
+      last_run_errors: productsErrors,
+      last_run_skipped: productsSkipped,
     }).eq("user_id", userId);
 
     return new Response(
