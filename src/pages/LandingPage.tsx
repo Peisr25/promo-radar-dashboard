@@ -27,7 +27,7 @@ const channels = [
   {
     icon: "smart_outlet",
     title: "Moda",
-    description: "Automação residencial, Robôs aspiradores, Assistentes virtuais e Segurança.",
+    description: "Roupas, Calçados, Acessórios, Bolsas e Tendências de temporada.",
     cta: "Entrar no Canal",
     highlighted: false,
   },
