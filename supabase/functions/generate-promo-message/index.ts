@@ -13,6 +13,8 @@ function getMedal(discount: number): string {
   return "🥉";
 }
 
+// --- Prompt builders ---
+
 function buildDefaultPrompt(): string {
   return `Você atua no WhatsApp. É ESTRITAMENTE PROIBIDO usar introduções, saudações, bullet points, descrições de funcionalidades ou emojis não solicitados.
 
@@ -93,6 +95,62 @@ REGRAS:
 - MÁXIMO 6 linhas (excluindo linhas em branco de separação). Nunca use formato de lista ou descrições longas.`;
 }
 
+function buildBroadcastPrompt(config: {
+  tone: string;
+  copy_length: string;
+  emoji_level: string;
+  show_installments: boolean;
+}): string {
+  const toneMap: Record<string, string> = {
+    urgente: "Use um tom de URGÊNCIA e ESCASSEZ. Transmita que é uma oferta imperdível, que pode acabar a qualquer momento. Use palavras como 'CORRE', 'ACABOU DE BUGAR', 'PREÇO ERRADO'. Crie FOMO.",
+    amigavel: "Use um tom AMIGÁVEL e DESCONTRAÍDO. Fale como se estivesse recomendando a um amigo. Use humor leve, memes e referências da cultura pop brasileira.",
+    profissional: "Use um tom DIRETO e PROFISSIONAL. Vá direto ao ponto, sem rodeios. Foque nos dados concretos: preço, desconto, parcelamento. Sem exageros.",
+  };
+
+  const lengthMap: Record<string, string> = {
+    curta: "MÁXIMO 4 linhas no total (excluindo linhas em branco de separação). Seja extremamente conciso e impactante.",
+    detalhada: "MÁXIMO 8 linhas no total (excluindo linhas em branco de separação). Pode incluir especificações técnicas relevantes do produto.",
+  };
+
+  const emojiMap: Record<string, string> = {
+    alta: "Use emojis LIVREMENTE ao longo do texto para dar destaque visual e energia.",
+    moderada: "Use NO MÁXIMO 3 emojis em toda a mensagem, nos pontos mais estratégicos.",
+    baixa: "Use NO MÁXIMO 1 emoji em toda a mensagem. A mensagem deve ser quase exclusivamente textual.",
+  };
+
+  const installmentRule = config.show_installments
+    ? "Se houver informação de parcelamento nos dados do produto, DESTAQUE o parcelamento de forma clara no bloco de preço."
+    : "NÃO mencione parcelamento na mensagem, mesmo que a informação esteja disponível.";
+
+  return `Você é um copywriter especialista em WhatsApp para promoções brasileiras.
+
+${toneMap[config.tone] || toneMap.urgente}
+
+REGRAS DE FORMATO:
+- ${lengthMap[config.copy_length] || lengthMap.curta}
+- ${emojiMap[config.emoji_level] || emojiMap.alta}
+- ${installmentRule}
+
+ESTRUTURA OBRIGATÓRIA (cada bloco separado por uma linha em branco):
+
+BLOCO 1 - GANCHO: Frase chamativa em CAIXA ALTA que capture atenção imediata.
+
+BLOCO 2 - TÍTULO: Nome do produto em Title Case.
+
+BLOCO 3 - URGÊNCIA (APENAS se indicado no contexto): Parágrafo ISOLADO de escassez. Se NÃO houver dados de urgência, OMITA completamente.
+
+BLOCO 4 - PREÇO: Preço com formatação WhatsApp (~antigo~ por *novo* com *% OFF*).
+
+REGRAS INVIOLÁVEIS:
+- Responda APENAS com a mensagem formatada, sem aspas, sem explicação.
+- NÃO inclua links ou URLs. O link será adicionado automaticamente.
+- Use formatação WhatsApp: ~texto~ para tachado e *texto* para negrito.
+- NUNCA misture urgência com o gancho. Urgência é SEMPRE um bloco separado.
+- Termine com uma Call-to-Action curta convidando à compra.`;
+}
+
+// --- Main handler ---
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -104,21 +162,17 @@ serve(async (req) => {
       product_title, price, old_price, discount_percentage,
       rating, installments, price_type, original_url,
       system_prompt, mode,
-      // Custom mode fields
       highlight_discount, highlight_installments,
       highlight_open_box, highlight_urgency, tone, is_buy_box,
-      // Scarcity metadata
       target_time, percent_claimed,
-      // Server-side lookup key
       raw_scrape_id,
-      // Source & metadata for social proof
       source, metadata,
+      message_config,
     } = body;
 
-    // Normalize empty-ish values
     const isEmpty = (v: unknown) => !v || v === "" || v === "null" || v === "undefined";
 
-    // Server-side metadata lookup when scarcity data is missing but raw_scrape_id is available
+    // Server-side scarcity lookup
     if (isEmpty(target_time) && isEmpty(percent_claimed) && raw_scrape_id) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL");
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -140,7 +194,7 @@ serve(async (req) => {
       console.log("Scarcity data from payload:", { target_time, percent_claimed, source: "payload" });
     }
 
-    // Shein social proof injection
+    // Shein social proof
     let socialProofInstruction = "";
     let socialProofUserContext = "";
     const meta = metadata as Record<string, unknown> | null;
@@ -154,7 +208,7 @@ serve(async (req) => {
         if (rankInfo) socialProofInstruction += ` O metadata indica que ele é: ${rankInfo}.`;
         if (sheinRating > 0) socialProofInstruction += ` Possui uma nota de ${sheinRating}`;
         if (sheinReviews) socialProofInstruction += ` com ${sheinReviews} avaliações`;
-        socialProofInstruction += `. Inclua no texto promocional um gatilho de aprovação popular forte (ex: "Selo de Mais Vendido", "Quase 5 estrelas em milhares de avaliações!").`;
+        socialProofInstruction += `. Inclua no texto promocional um gatilho de aprovação popular forte.`;
 
         socialProofUserContext = `\n\n🏆 PROVA SOCIAL SHEIN:`;
         if (rankInfo) socialProofUserContext += `\n- Ranking: ${rankInfo}`;
@@ -172,10 +226,20 @@ serve(async (req) => {
     const priceType = price_type === "PIX" ? "no Pix" : "à Vista";
     const formattedPrice = Number(price ?? 0).toFixed(2).replace(".", ",");
 
-    // Choose prompt based on mode
+    // Choose prompt based on mode / message_config
     let chosenPrompt: string;
     if (system_prompt) {
       chosenPrompt = system_prompt;
+    } else if (message_config && typeof message_config === "object") {
+      // Broadcast mode with message_config
+      const mc = message_config as Record<string, unknown>;
+      chosenPrompt = buildBroadcastPrompt({
+        tone: (mc.tone as string) ?? "urgente",
+        copy_length: (mc.copy_length as string) ?? "curta",
+        emoji_level: (mc.emoji_level as string) ?? "alta",
+        show_installments: mc.show_installments !== false,
+      });
+      console.log("Using broadcast prompt with message_config:", mc);
     } else if (mode === "custom") {
       chosenPrompt = buildCustomPrompt({
         highlight_discount: !!highlight_discount,
@@ -200,37 +264,27 @@ serve(async (req) => {
     if (installments) userContent += `\nParcelamento: ${installments}`;
     if (price_type) userContent += `\nTipo de pagamento: ${price_type}`;
     if (rating) userContent += `\nAvaliação: ${rating}`;
-    // original_url intentionally omitted to prevent AI from hallucinating links
 
-    // Inject scarcity context into BOTH prompt and user content
+    // Scarcity injection
     let scarcityInstruction = "";
     let scarcityUserContext = "";
     if (target_time || percent_claimed) {
       scarcityInstruction = `\n\n⚠️ REGRA INVIOLÁVEL - BLOCO DE URGÊNCIA: Este produto é uma Oferta Relâmpago. Você DEVE OBRIGATORIAMENTE incluir o BLOCO 3 (URGÊNCIA) na sua resposta. Este bloco é OBRIGATÓRIO e NÃO PODE ser omitido em NENHUMA circunstância. Crie um parágrafo ISOLADO (separado por linhas em branco antes e depois) dedicado APENAS à escassez.`;
       if (target_time) scarcityInstruction += ` O tempo está a acabar (termina em: ${target_time}).`;
       if (percent_claimed) scarcityInstruction += ` Já há muitas unidades vendidas (${percent_claimed}).`;
-      scarcityInstruction += ` Use emojis ⚡ ou ⏳. Exemplo: '⚡ OFERTA RELÂMPAGO: Já temos 84% vendido, corre que tá acabando!'. NUNCA misture este texto com a frase de humor do gancho. Se você omitir este bloco, a resposta será REJEITADA.`;
+      scarcityInstruction += ` Use emojis ⚡ ou ⏳. NUNCA misture este texto com a frase de humor do gancho.`;
 
-      // Also inject into user content so AI sees it as factual data
       scarcityUserContext = `\n\n🔴 OFERTA RELÂMPAGO - DADOS DE ESCASSEZ:`;
       if (percent_claimed) scarcityUserContext += `\n- Unidades vendidas: ${percent_claimed}`;
       if (target_time) scarcityUserContext += `\n- Termina em: ${target_time}`;
       scarcityUserContext += `\nINCLUA OBRIGATORIAMENTE um parágrafo isolado de urgência com estes dados na mensagem.`;
     }
 
-    // Append scarcity + social proof to chosen prompt
     chosenPrompt += scarcityInstruction;
     chosenPrompt += socialProofInstruction;
-
-    if (mode !== "custom") {
-      userContent += scarcityUserContext;
-      userContent += socialProofUserContext;
-      userContent += `\n\nCrie a mensagem seguindo a estrutura indicada:`;
-    } else {
-      userContent += scarcityUserContext;
-      userContent += socialProofUserContext;
-      userContent += `\n\nCrie a mensagem promocional:`;
-    }
+    userContent += scarcityUserContext;
+    userContent += socialProofUserContext;
+    userContent += `\n\nCrie a mensagem promocional:`;
 
     // Retry up to 2 times on 5xx errors
     let response: Response | null = null;
@@ -258,7 +312,7 @@ serve(async (req) => {
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos insuficientes. Adicione créditos em Settings > Workspace > Usage." }), {
+        return new Response(JSON.stringify({ error: "Créditos insuficientes." }), {
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -271,8 +325,7 @@ serve(async (req) => {
     }
 
     if (!response || !response.ok) {
-      // Fallback
-      console.warn("AI gateway unavailable, using fallback title");
+      console.warn("AI gateway unavailable, using fallback");
       const fallbackTitle = "PROMOÇÃO IMPERDÍVEL";
       const formatBRL = (v: number) => v.toFixed(2).replace(".", ",");
       let message = `${medal} ${fallbackTitle}\n\n`;

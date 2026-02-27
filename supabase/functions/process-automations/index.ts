@@ -51,7 +51,6 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Try getClaims first, fall back to getUser for broader compatibility
     let extractedUserId: string | null = null;
     try {
       const token = authHeader.replace("Bearer ", "");
@@ -59,9 +58,7 @@ Deno.serve(async (req) => {
       if (!claimsError && claimsData?.claims) {
         extractedUserId = claimsData.claims.sub as string;
       }
-    } catch {
-      // getClaims not available, try getUser
-    }
+    } catch {}
 
     if (!extractedUserId) {
       const { data: userData, error: userError } = await userClient.auth.getUser();
@@ -76,7 +73,7 @@ Deno.serve(async (req) => {
 
     userId = extractedUserId;
 
-    // Fetch motor_control settings (limits etc.)
+    // Fetch motor_control settings
     const { data: existingCtrl } = await admin
       .from("motor_control")
       .select("*")
@@ -127,15 +124,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Pre-fetch whatsapp group mappings
-    const groupUuids = [...new Set(rules.map((r) => r.target_group_id))];
-    const { data: groupRows } = await admin
-      .from("whatsapp_groups")
-      .select("id, group_id, group_name")
-      .in("id", groupUuids);
-    const groupMap = new Map((groupRows ?? []).map((g) => [g.id, g]));
-
-    // Check rate limits — count messages sent in the last hour and today
+    // Check rate limits
     let sentLastHour = 0;
     let sentToday = 0;
 
@@ -183,7 +172,7 @@ Deno.serve(async (req) => {
     let skipped = 0;
     let rateLimited = false;
 
-    // Phase 2 & 3 — Match & Execute
+    // Phase 2 & 3 — Match & Execute (Broadcast)
     for (const scrape of scrapes) {
       // Kill switch check
       const { data: ctrl } = await admin
@@ -230,7 +219,7 @@ Deno.serve(async (req) => {
       const discount = parseDiscount(scrape.discount_percentage);
       const title = scrape.product_title ?? "Sem título";
 
-      // Find first matching rule — supports __all__ token for "all categories"
+      // Find first matching rule
       const matchedRule = rules.find((rule) => {
         const categoryMatch =
           rule.categories.includes(ALL_CATEGORIES_TOKEN) || rule.categories.includes(categoria);
@@ -243,13 +232,54 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Descriptive processing log with metadata
+      // --- BROADCAST: Find target groups dynamically by niche ---
+      const targetCats = (matchedRule.target_categories as string[]) ?? [];
+      let targetGroups: { id: string; group_id: string; group_name: string }[] = [];
+
+      if (targetCats.includes(ALL_CATEGORIES_TOKEN) || targetCats.length === 0) {
+        // All active groups for this user
+        const { data: allGroups } = await admin
+          .from("whatsapp_groups")
+          .select("id, group_id, group_name")
+          .eq("user_id", userId)
+          .eq("is_active", true);
+        targetGroups = allGroups ?? [];
+      } else {
+        // Groups whose categories overlap with target_categories
+        const { data: nicheGroups } = await admin
+          .from("whatsapp_groups")
+          .select("id, group_id, group_name, categories")
+          .eq("user_id", userId)
+          .eq("is_active", true);
+        
+        // Filter by overlap (Supabase JS doesn't have native overlaps, so filter in code)
+        targetGroups = (nicheGroups ?? []).filter((g) => {
+          const gCats = (g.categories as string[]) ?? [];
+          return gCats.some((c) => targetCats.includes(c));
+        });
+      }
+
+      if (targetGroups.length === 0) {
+        await admin.from("automation_logs").insert({
+          user_id: userId,
+          rule_id: matchedRule.id,
+          scrape_id: scrape.id,
+          status: "skipped",
+          message: `Nenhum grupo ativo encontrado para os nichos: ${targetCats.join(", ")}`,
+          metadata: { type: "no_target_groups", target_categories: targetCats, rule_name: matchedRule.name },
+        });
+        await admin.from("raw_scrapes").update({ status: "skipped" }).eq("id", scrape.id);
+        skipped++;
+        continue;
+      }
+
+      // Descriptive processing log
       const { data: logRow } = await admin.from("automation_logs").insert({
         rule_id: matchedRule.id,
         scrape_id: scrape.id,
         user_id: userId,
         status: "processing",
-        message: `Processando: ${title.substring(0, 60)} (${discount}% off)`,
+        message: `Processando: ${title.substring(0, 60)} (${discount}% off) -> ${targetGroups.length} grupo(s)`,
         metadata: {
           type: "processing",
           categoria,
@@ -257,15 +287,13 @@ Deno.serve(async (req) => {
           price: scrape.price,
           old_price: scrape.old_price,
           rule_name: matchedRule.name,
+          target_groups_count: targetGroups.length,
         },
       }).select("id").single();
       const logId = logRow?.id;
 
       try {
-        const group = groupMap.get(matchedRule.target_group_id);
-        if (!group) throw new Error(`Grupo de destino não encontrado (ID: ${matchedRule.target_group_id}).`);
-
-        // Build generate-promo-message payload (WITHOUT original_url)
+        // Build generate-promo-message payload
         const generateBody: Record<string, unknown> = {
           product_title: scrape.product_title,
           price: scrape.price,
@@ -275,10 +303,17 @@ Deno.serve(async (req) => {
           installments: scrape.installments,
           price_type: scrape.price_type,
           is_buy_box: metadata.is_buy_box ?? false,
-          // original_url intentionally omitted to prevent AI hallucination
+          raw_scrape_id: scrape.id,
+          source: scrape.source,
+          metadata: scrape.metadata,
         };
 
-        if (matchedRule.ai_mode === "custom" && matchedRule.custom_ai_options) {
+        // Pass message_config for broadcast mode
+        if (matchedRule.message_config) {
+          generateBody.message_config = matchedRule.message_config;
+        }
+
+        if (matchedRule.ai_mode === "customizado" && matchedRule.custom_ai_options) {
           generateBody.mode = "custom";
           const opts = matchedRule.custom_ai_options as Record<string, unknown>;
           generateBody.highlight_discount = opts.highlight_discount ?? false;
@@ -288,7 +323,7 @@ Deno.serve(async (req) => {
           generateBody.tone = opts.tone ?? "funny";
         }
 
-        // Call generate-promo-message
+        // Call generate-promo-message (generate 1x)
         const genRes = await fetch(`${supabaseUrl}/functions/v1/generate-promo-message`, {
           method: "POST",
           headers: { Authorization: authHeader, "Content-Type": "application/json" },
@@ -330,64 +365,105 @@ Deno.serve(async (req) => {
         // Concatenate AI text + short link
         const finalMessage = shortUrl ? `${aiText}\n\n${shortUrl}` : aiText;
 
-        // Send to WhatsApp
-        const sendBody: Record<string, unknown> = {
-          action: "send",
-          group_id: group.group_id,
-          text: finalMessage,
-        };
-        if (scrape.image_url) {
-          sendBody.image_url = scrape.image_url;
+        // --- BROADCAST LOOP: Send to all target groups ---
+        const delaySeconds = existingCtrl?.delay_between_messages ?? 8;
+        let groupsSent = 0;
+        let groupErrors = 0;
+
+        for (const group of targetGroups) {
+          // Rate limit re-check per group send
+          if (maxPerHour > 0 && (sentLastHour + sent) >= maxPerHour) {
+            rateLimited = true;
+            break;
+          }
+          if (maxPerDay > 0 && (sentToday + sent) >= maxPerDay) {
+            rateLimited = true;
+            break;
+          }
+
+          try {
+            const sendBody: Record<string, unknown> = {
+              action: "send",
+              group_id: group.group_id,
+              text: finalMessage,
+            };
+            if (scrape.image_url) {
+              sendBody.image_url = scrape.image_url;
+            }
+
+            const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp-message`, {
+              method: "POST",
+              headers: { Authorization: authHeader, "Content-Type": "application/json" },
+              body: JSON.stringify(sendBody),
+            });
+
+            const sendData = await sendRes.json();
+            if (!sendRes.ok || !sendData.success) {
+              throw new Error(sendData.message ?? "Falha ao enviar para WhatsApp.");
+            }
+
+            // Log each send
+            await admin.from("whatsapp_messages_log").insert({
+              user_id: userId,
+              group_id: group.id,
+              message_text: finalMessage,
+              status: "sent",
+            });
+
+            // Increment group message count
+            await admin.rpc("increment_group_messages", { group_id_param: group.id });
+
+            groupsSent++;
+            sent++;
+
+            // Anti-spam delay between group sends
+            if (targetGroups.indexOf(group) < targetGroups.length - 1) {
+              await new Promise((r) => setTimeout(r, delaySeconds * 1000));
+            }
+          } catch (groupErr) {
+            groupErrors++;
+            errors++;
+            const errMsg = groupErr instanceof Error ? groupErr.message : "Erro desconhecido";
+            console.error(`Error sending to group ${group.group_name}:`, errMsg);
+
+            await admin.from("whatsapp_messages_log").insert({
+              user_id: userId,
+              group_id: group.id,
+              message_text: finalMessage,
+              status: "error",
+              error_message: errMsg.substring(0, 200),
+            });
+          }
         }
 
-        const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp-message`, {
-          method: "POST",
-          headers: { Authorization: authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify(sendBody),
-        });
-
-        const sendData = await sendRes.json();
-        if (!sendRes.ok || !sendData.success) {
-          throw new Error(sendData.message ?? "Falha ao enviar para WhatsApp.");
-        }
-
-        // Success — update log with rich metadata
+        // Update log with broadcast results
         if (logId) {
           await admin.from("automation_logs").update({
-            status: "success",
-            message: `Enviado: ${title.substring(0, 50)} -> ${group.group_name}`,
+            status: groupsSent > 0 ? "success" : "error",
+            message: `Enviado: ${title.substring(0, 40)} -> ${groupsSent}/${targetGroups.length} grupo(s)`,
             metadata: {
               type: "sent",
               categoria,
               discount,
               price: scrape.price,
               old_price: scrape.old_price,
-              group_name: group.group_name,
               rule_name: matchedRule.name,
               has_image: !!scrape.image_url,
               has_short_link: !!shortUrl,
+              groups_sent: groupsSent,
+              groups_errors: groupErrors,
+              groups_total: targetGroups.length,
+              group_names: targetGroups.map((g) => g.group_name),
             },
           }).eq("id", logId);
         }
 
         await admin.from("raw_scrapes").update({ status: "published" }).eq("id", scrape.id);
 
-        // Increment group messages stats
-        await admin.rpc("increment_group_messages", { group_id_param: matchedRule.target_group_id });
-
-        // Insert into whatsapp_messages_log for dashboard metrics
-        await admin.from("whatsapp_messages_log").insert({
-          user_id: userId,
-          group_id: matchedRule.target_group_id,
-          message_text: finalMessage,
-          status: "sent",
-        });
-
-        sent++;
-
-        // Anti-spam delay: configurable (default 8s)
-        const delaySeconds = existingCtrl?.delay_between_messages ?? 8;
-        await new Promise((r) => setTimeout(r, delaySeconds * 1000));
+        // Anti-spam delay before next scrape
+        if (scrapes.indexOf(scrape) < scrapes.length - 1) {
+          await new Promise((r) => setTimeout(r, delaySeconds * 1000));
+        }
       } catch (e) {
         errors++;
         const errorMsg = e instanceof Error ? e.message : "Erro desconhecido";
@@ -428,7 +504,6 @@ Deno.serve(async (req) => {
       },
     });
 
-    // Motor finished — update with stats
     await admin.from("motor_control").update({
       is_running: false,
       updated_at: new Date().toISOString(),
@@ -444,7 +519,6 @@ Deno.serve(async (req) => {
     );
   } catch (e) {
     console.error("process-automations error:", e);
-    // Ensure motor is stopped on crash
     if (userId) {
       try { await admin.from("motor_control").update({ is_running: false, updated_at: new Date().toISOString() }).eq("user_id", userId); } catch {}
       try { await admin.from("automation_logs").insert({
