@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     // Phase 1 — Fetch rules & pending scrapes
     const [rulesRes, scrapesRes] = await Promise.all([
       admin.from("automation_rules").select("*").eq("user_id", userId).eq("is_active", true),
-      admin.from("raw_scrapes").select("*").eq("status", "pending"),
+      admin.from("raw_scrapes").select("*").eq("status", "pending").limit(5),
     ]);
 
     if (rulesRes.error) throw new Error("Erro ao buscar regras: " + rulesRes.error.message);
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
     let skipped = 0;
     let rateLimited = false;
     let timedOut = false;
-    const MAX_EXECUTION_MS = 120_000; // 120s safety margin (Edge Function timeout ~150s)
+    const MAX_EXECUTION_MS = 45_000; // 45s safety — well within Edge Function limit
 
     // Phase 2 & 3 — Match & Execute (Broadcast)
     for (const scrape of scrapes) {
