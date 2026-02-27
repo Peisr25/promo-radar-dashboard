@@ -19,8 +19,26 @@ const BASE_CATEGORIES = [
   "Outros",
 ];
 
-// Capitalize first letter of each word for consistent display
-const titleCase = (s: string) => s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+// Capitalize words, but keep small words (e, de, da, do) lowercase, EXCEPT TV
+const titleCase = (s: string) => {
+  const smallWords = ["e", "de", "da", "do", "das", "dos", "para", "com"];
+
+  return s
+    .toLowerCase()
+    .split(" ")
+    .map((word, index) => {
+      // Exceção especial para "TV" (sempre maiúsculo)
+      if (word === "tv") return "TV";
+
+      // Se for uma palavra de ligação e não for a primeira palavra, mantém minúscula
+      if (smallWords.includes(word) && index !== 0) {
+        return word;
+      }
+      // Caso contrário, capitaliza a primeira letra
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
