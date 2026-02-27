@@ -45,11 +45,15 @@ const categoryImageMap: Record<string, string> = {
 const defaultImage = "https://lh3.googleusercontent.com/aida-public/AB6AXuBMTOBnD9D7YAgV5JiibWbGnyNUa_smmNJjoWplQVap197IFSfia4lnuKm3NfWkKNcrW4Gwn0YaZ_Kl3cTyyXpkEYrBGOzBT4dBtlNZul7EcCRlHmenzQ4nunnNEAK99PziGLIhv_wVrkSGNjQZu6uT4em-TJ0LqygVRVUynYuUk_PwtEsHf4kusNUKrwRqv6fKAlcO3Gowgy8zCTKhXA5r9nBMn5qqe1Oi9PV92Z5ZJphkboeyYYVaAXGUF1GWwdPMwiP6ZRRrBGw";
 
 const categoryIconMap: Record<string, string> = {
+  Todos: "apps",
   Tech: "devices",
   Casa: "chair",
   Moda: "styler",
   Geek: "sports_esports",
   Kids: "child_care",
+  Geral: "category",
+  Beleza: "spa",
+  "Achadinhos da Shopee": "local_fire_department",
   Relâmpago: "bolt",
 };
 
@@ -80,7 +84,7 @@ export default function Groups() {
     // Add flash deals as "Relâmpago" if any
     if (groups.some((g) => g.is_flash_deals_only)) cats.add("Relâmpago");
     const arr = Array.from(cats).map((label) => ({ icon: categoryIconMap[label] || "", label }));
-    return [{ icon: "", label: "Todos" }, ...arr];
+    return [{ icon: categoryIconMap["Todos"] || "", label: "Todos" }, ...arr];
   })();
 
   const filteredGroups = groups.filter((g) => {
