@@ -78,7 +78,7 @@ export default function LandingPage() {
             <span className="text-lg font-bold">Radar das Promos</span>
           </button>
           <div className="hidden items-center gap-6 md:flex">
-            <button onClick={() => navigate("/")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Início</button>
+            <a href="/" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Início</a>
             <a href="#tecnologia" className="text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5">Tecnologia</a>
             <button onClick={() => navigate("/grupos")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Grupos</button>
             <a href="#confianca" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Segurança</a>
