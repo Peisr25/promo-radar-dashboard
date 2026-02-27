@@ -123,7 +123,7 @@ export default function Automations() {
 
   const runEngineMutation = useMutation({
     mutationFn: async () => {
-      // Upsert motor_control to is_running = true
+      // Upsert motor_control to is_running = true (otimista — Railway também seta)
       const { data: existing } = await supabase
         .from("motor_control")
         .select("id")
@@ -137,16 +137,30 @@ export default function Automations() {
 
       queryClient.invalidateQueries({ queryKey: ["motor_control"] });
 
-      const { data, error } = await supabase.functions.invoke("process-automations", {
-        body: {},
+      // Chama o Motor no Railway (FastAPI) em vez da Edge Function
+      const RAILWAY_URL = import.meta.env.VITE_RAILWAY_MOTOR_URL || "https://fast-api-scrapers-radar-production.up.railway.app";
+      const token = session?.access_token;
+
+      const res = await fetch(`${RAILWAY_URL}/api/process-automations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
       });
-      if (error) throw error;
-      return data as { processed: number; sent: number; errors: number; skipped: number };
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({ error: "Erro de rede" }));
+        throw new Error(errBody.detail || errBody.error || `HTTP ${res.status}`);
+      }
+
+      // Railway retorna 202 — o motor roda em background
+      return await res.json() as { status: string; message: string };
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast({
-        title: "Motor executado",
-        description: `${data.sent} enviados, ${data.skipped} ignorados, ${data.errors} erros.`,
+        title: "Motor iniciado",
+        description: "Processamento rodando em background no servidor. Acompanhe pelo log abaixo.",
       });
       queryClient.invalidateQueries({ queryKey: ["automation_rules"] });
       queryClient.invalidateQueries({ queryKey: ["automation_logs"] });
