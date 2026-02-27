@@ -1,39 +1,61 @@
 
 
-## Corrigir Cabecalho da Landing Page
+## Sublinhado Dinamico nos Links do Cabecalho
 
 ### Problema
-O cabecalho (navbar) da Landing Page esta diferente do cabecalho da pagina /grupos:
-1. **Estilo diferente**: A Landing Page usa `h-20`, `border-border/10`, `bg-background/30`, logo com borda extra, e botao com estilo custom. A pagina /grupos usa `h-16`, `border-border/50`, `bg-background/80`, logo simples, e botao com `variant="outline"`.
-2. **Falta o link "Inicio"**: A Landing Page nao tem o hiperlink "Inicio" que existe em /grupos.
-3. **Anchors incorretos**: O link "Tecnologia" na /grupos aponta para `/#tech` mas o id na Landing Page e `id="tecnologia"`. O link "Seguranca" aponta para `/#stats` mas o id e `id="confianca"`.
+Atualmente, apenas "Tecnologia" tem o sublinhado ativo (bold + borda secundaria) fixo no cabecalho da Landing Page. Ao clicar em "Inicio" ou "Seguranca", o sublinhado nao muda — ele permanece sempre em "Tecnologia".
 
-### Alteracoes
+### Solucao
+Implementar um estado ativo dinamico baseado na posicao de scroll da pagina. Quando o usuario estiver no topo, "Inicio" fica ativo. Quando a secao `#tecnologia` estiver visivel, "Tecnologia" fica ativo. Quando `#confianca` estiver visivel, "Seguranca" fica ativo.
 
-#### 1. Substituir o cabecalho da Landing Page (`src/pages/LandingPage.tsx`)
+### Alteracoes em `src/pages/LandingPage.tsx`
 
-Trocar o bloco `<header>` atual (linhas ~79-95) pelo mesmo padrao usado em /grupos:
+1. **Adicionar estado e efeito de scroll**:
+   - Criar um estado `activeSection` (valores: `"inicio"`, `"tecnologia"`, `"confianca"`)
+   - Adicionar um `useEffect` com `IntersectionObserver` ou listener de scroll que detecta qual secao esta visivel e atualiza o estado
+   - Logica: se scroll esta no topo (< 200px), ativo = "inicio". Se secao `#confianca` esta visivel, ativo = "confianca". Se secao `#tecnologia` esta visivel, ativo = "tecnologia". Fallback = "inicio".
 
-- Mudar de `<header>` para `<nav>` com classes `fixed top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl`
-- Container interno: `h-16` em vez de `h-20`, com `px-4 sm:px-6`
-- Logo: botao simples com `rounded-lg bg-secondary/20` (sem borda extra)
-- Links de navegacao:
-  - Adicionar "Inicio" apontando para `/`
-  - "Tecnologia" com link ativo (bold + border-bottom secondary, pois estamos na landing)
-  - "Grupos" apontando para `/grupos`
-  - "Seguranca" apontando para `#confianca`
-- Botao "Entrar": usar `Button` com `variant="outline"` e classes `border-secondary/30 text-secondary hover:bg-secondary/10`
+2. **Aplicar classes condicionalmente nos links**:
+   - Cada link recebe a classe ativa (`text-foreground font-bold border-b-2 border-secondary pb-0.5`) apenas quando `activeSection` corresponde ao seu valor
+   - Caso contrario, usa a classe inativa (`text-muted-foreground hover:text-foreground`)
 
-#### 2. Corrigir os anchor IDs ou os links
-
-Duas opcoes - vou alinhar os links com os IDs existentes na Landing Page:
-- "Tecnologia" linkar para `#tecnologia` (ID ja existe na landing page)
-- "Seguranca" linkar para `#confianca` (ID ja existe na landing page)
-- Atualizar tambem os links em /grupos para usar `/#tecnologia` e `/#confianca` em vez de `/#tech` e `/#stats`
+3. **Ao clicar**, o scroll leva a secao correspondente e o observer atualiza o sublinhado automaticamente.
 
 ### Secao Tecnica
 
-**Ficheiros alterados:**
-- `src/pages/LandingPage.tsx` - substituir bloco do header pelo padrao de /grupos, adicionar import do `Button`
-- `src/pages/Groups.tsx` - corrigir anchors de `/#tech` para `/#tecnologia` e `/#stats` para `/#confianca`
+**Ficheiro alterado:** `src/pages/LandingPage.tsx`
 
+```text
+Pseudo-codigo do efeito:
+
+const [activeSection, setActiveSection] = useState("inicio");
+
+useEffect(() => {
+  const handleScroll = () => {
+    const scrollY = window.scrollY;
+    const techSection = document.getElementById("tecnologia");
+    const trustSection = document.getElementById("confianca");
+
+    if (trustSection && scrollY >= trustSection.offsetTop - 150) {
+      setActiveSection("confianca");
+    } else if (techSection && scrollY >= techSection.offsetTop - 150) {
+      setActiveSection("tecnologia");
+    } else {
+      setActiveSection("inicio");
+    }
+  };
+  window.addEventListener("scroll", handleScroll);
+  handleScroll(); // initial check
+  return () => window.removeEventListener("scroll", handleScroll);
+}, []);
+```
+
+Cada link usa:
+```text
+className={activeSection === "inicio"
+  ? "text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5"
+  : "text-sm text-muted-foreground hover:text-foreground transition-colors"
+}
+```
+
+Nenhum outro ficheiro precisa ser alterado. A pagina /grupos mantem o sublinhado fixo em "Grupos" como esta.
