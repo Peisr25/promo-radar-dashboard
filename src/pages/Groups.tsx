@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,10 @@ const categoryIconMap: Record<string, string> = {
 
 export default function Groups() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   const [activeCategory, setActiveCategory] = useState("Todos");
   const [searchQuery, setSearchQuery] = useState("");
   const [email, setEmail] = useState("");
