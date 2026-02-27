@@ -41,7 +41,18 @@ type WhatsAppGroup = Tables<"whatsapp_groups"> & {
 };
 
 // Nichos disponíveis para atribuir aos grupos
-const CATEGORY_OPTIONS = ['Tech', 'Casa', 'Moda', 'Geek', 'Kids', 'Beleza', 'Geral'];
+const CATEGORY_OPTIONS = ['Tech', 'Casa', 'Moda', 'Geek', 'Kids', 'Beleza', 'Geral', 'Relâmpago', 'Achadinhos da Shopee'];
+
+const SEED_GROUPS = [
+  { name: 'Radar das Promos TECH #01', categories: ['Tech'], is_flash_deals_only: false },
+  { name: 'Radar das Promos CASA #01', categories: ['Casa'], is_flash_deals_only: false },
+  { name: 'Radar das Promos MODA #01', categories: ['Moda'], is_flash_deals_only: false },
+  { name: 'Radar das Promos GEEK #01', categories: ['Geek'], is_flash_deals_only: false },
+  { name: 'Radar das Promos RELÂMPAGO #01', categories: ['Relâmpago'], is_flash_deals_only: true },
+  { name: 'Radar das Promos KIDS #01', categories: ['Kids'], is_flash_deals_only: false },
+  { name: 'Radar das Promos GERAL #01', categories: ['Geral'], is_flash_deals_only: false },
+  { name: 'Radar das Promos SHOPEE #01', categories: ['Achadinhos da Shopee'], is_flash_deals_only: false },
+];
 
 export default function WhatsAppSettings() {
   const { user } = useAuth();
@@ -76,6 +87,11 @@ export default function WhatsAppSettings() {
   const [bulkNichosOpen, setBulkNichosOpen] = useState(false);
   const [bulkCategories, setBulkCategories] = useState<string[]>([]);
   const [bulkSaving, setBulkSaving] = useState(false);
+
+  // Seed groups
+  const [seedDialogOpen, setSeedDialogOpen] = useState(false);
+  const [seedAdminNumber, setSeedAdminNumber] = useState("");
+  const [seedingGroups, setSeedingGroups] = useState(false);
 
   // New group form
   const [newGroup, setNewGroup] = useState({
@@ -411,6 +427,34 @@ export default function WhatsAppSettings() {
     });
   };
 
+  const handleSeedGroups = async () => {
+    if (!seedAdminNumber.trim()) {
+      toast({ title: "Informe o número do admin", variant: "destructive" });
+      return;
+    }
+    setSeedingGroups(true);
+    let success = 0;
+    let fail = 0;
+    for (const g of SEED_GROUPS) {
+      const { data, error } = await supabase.functions.invoke("manage-whatsapp-groups", {
+        body: {
+          action: "create",
+          name: g.name,
+          admin_number: seedAdminNumber.trim(),
+          categories: g.categories,
+          is_flash_deals_only: g.is_flash_deals_only,
+        },
+      });
+      if (error || !data?.success) fail++;
+      else success++;
+    }
+    setSeedingGroups(false);
+    setSeedDialogOpen(false);
+    setSeedAdminNumber("");
+    toast({ title: `${success} grupo(s) criado(s), ${fail} falha(s).` });
+    loadGroups();
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: "Copiado!" });
@@ -522,6 +566,10 @@ export default function WhatsAppSettings() {
               </Dialog>
               <Button size="sm" variant="outline" onClick={() => setCreateApiDialogOpen(true)}>
                 <Sparkles className="mr-2 h-4 w-4" /> Criar Novo Grupo (API)
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setSeedDialogOpen(true)} disabled={seedingGroups}>
+                {seedingGroups ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                🚀 Gerar Grupos Iniciais (API)
               </Button>
             </div>
           </div>
@@ -828,6 +876,41 @@ export default function WhatsAppSettings() {
             <Button onClick={saveBulkNichos} disabled={bulkSaving}>
               {bulkSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Aplicar a {selectedIds.size} grupo(s)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Seed Groups Modal */}
+      <Dialog open={seedDialogOpen} onOpenChange={setSeedDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>🚀 Gerar Grupos Iniciais</DialogTitle>
+            <DialogDescription>
+              Serão criados {SEED_GROUPS.length} grupos com branding padrão via API. Informe o número do admin que será adicionado a todos.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Número do Admin</Label>
+              <Input placeholder="5511999999999" value={seedAdminNumber}
+                onChange={(e) => setSeedAdminNumber(e.target.value)} />
+              <p className="text-xs text-muted-foreground">Formato internacional sem +, ex: 5511999999999</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Grupos que serão criados:</Label>
+              <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
+                {SEED_GROUPS.map((g) => (
+                  <li key={g.name}>{g.name} — {g.categories.join(', ')}{g.is_flash_deals_only ? ' ⚡' : ''}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSeedDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSeedGroups} disabled={seedingGroups || !seedAdminNumber.trim()}>
+              {seedingGroups && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Criar {SEED_GROUPS.length} Grupos
             </Button>
           </DialogFooter>
         </DialogContent>
