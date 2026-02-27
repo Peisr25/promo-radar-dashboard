@@ -1,53 +1,39 @@
 
 
-## Agendamento Automatico - Sync de Participantes a Cada 3 Horas
+## Corrigir Cabecalho da Landing Page
 
-### O que sera feito
-
-Configurar um cron job que roda a cada 3 horas para sincronizar automaticamente a contagem de participantes de todos os grupos WhatsApp de todos os usuarios.
+### Problema
+O cabecalho (navbar) da Landing Page esta diferente do cabecalho da pagina /grupos:
+1. **Estilo diferente**: A Landing Page usa `h-20`, `border-border/10`, `bg-background/30`, logo com borda extra, e botao com estilo custom. A pagina /grupos usa `h-16`, `border-border/50`, `bg-background/80`, logo simples, e botao com `variant="outline"`.
+2. **Falta o link "Inicio"**: A Landing Page nao tem o hiperlink "Inicio" que existe em /grupos.
+3. **Anchors incorretos**: O link "Tecnologia" na /grupos aponta para `/#tech` mas o id na Landing Page e `id="tecnologia"`. O link "Seguranca" aponta para `/#stats` mas o id e `id="confianca"`.
 
 ### Alteracoes
 
-#### 1. Edge Function `manage-whatsapp-groups` - Nova action `cron_sync_all`
+#### 1. Substituir o cabecalho da Landing Page (`src/pages/LandingPage.tsx`)
 
-Adicionar uma nova action que:
-- Nao exige autenticacao de usuario (sera chamada pelo cron com anon key)
-- Valida que a chamada vem do cron verificando um header especial ou simplesmente usando service_role internamente
-- Busca TODOS os usuarios com `evolution_config` ativa
-- Para cada usuario, executa a logica de `sync_counts` existente (busca grupos da Evolution API e atualiza contagens no banco)
-- Retorna um resumo global (total de usuarios processados, grupos atualizados)
+Trocar o bloco `<header>` atual (linhas ~79-95) pelo mesmo padrao usado em /grupos:
 
-Fluxo simplificado:
-```text
-cron_sync_all ->
-  1. adminClient busca todos evolution_config onde is_active = true
-  2. Para cada config (usuario):
-     a. Chama Evolution API fetchAllGroups
-     b. Busca whatsapp_groups do usuario no banco
-     c. Atualiza participant_count e is_full
-  3. Retorna resumo
-```
+- Mudar de `<header>` para `<nav>` com classes `fixed top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl`
+- Container interno: `h-16` em vez de `h-20`, com `px-4 sm:px-6`
+- Logo: botao simples com `rounded-lg bg-secondary/20` (sem borda extra)
+- Links de navegacao:
+  - Adicionar "Inicio" apontando para `/`
+  - "Tecnologia" com link ativo (bold + border-bottom secondary, pois estamos na landing)
+  - "Grupos" apontando para `/grupos`
+  - "Seguranca" apontando para `#confianca`
+- Botao "Entrar": usar `Button` com `variant="outline"` e classes `border-secondary/30 text-secondary hover:bg-secondary/10`
 
-A action `cron_sync_all` sera acionada quando o body contiver `{"action": "cron_sync_all"}`. Neste caso, o bloco de autenticacao de usuario sera pulado (early return antes do getClaims).
+#### 2. Corrigir os anchor IDs ou os links
 
-#### 2. Cron Job via pg_cron + pg_net
-
-Executar SQL (via insert tool, nao migration) para:
-- Habilitar extensoes `pg_cron` e `pg_net` (se ainda nao habilitadas)
-- Criar o schedule `sync-group-counts-every-3h` com expressao `0 */3 * * *`
-- O job faz um POST para a edge function com `{"action": "cron_sync_all"}` e o anon key no header Authorization
+Duas opcoes - vou alinhar os links com os IDs existentes na Landing Page:
+- "Tecnologia" linkar para `#tecnologia` (ID ja existe na landing page)
+- "Seguranca" linkar para `#confianca` (ID ja existe na landing page)
+- Atualizar tambem os links em /grupos para usar `/#tecnologia` e `/#confianca` em vez de `/#tech` e `/#stats`
 
 ### Secao Tecnica
 
 **Ficheiros alterados:**
-- `supabase/functions/manage-whatsapp-groups/index.ts` - adicionar action `cron_sync_all` com bypass de auth
-
-**SQL executado (insert tool):**
-- Habilitar extensoes pg_cron e pg_net
-- Criar cron schedule apontando para a URL da edge function
-
-**Seguranca:**
-- A action `cron_sync_all` usa internamente o `service_role_key` para acessar dados de todos os usuarios
-- Nao expoe dados sensiveis na resposta
-- A anon key no header e suficiente pois `verify_jwt = false` ja esta configurado
+- `src/pages/LandingPage.tsx` - substituir bloco do header pelo padrao de /grupos, adicionar import do `Button`
+- `src/pages/Groups.tsx` - corrigir anchors de `/#tech` para `/#tecnologia` e `/#stats` para `/#confianca`
 
