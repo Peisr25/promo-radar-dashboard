@@ -2,109 +2,56 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale/pt-BR";
 import PublicFooter from "@/components/PublicFooter";
 
 function MaterialIcon({ name, className }: { name: string; className?: string }) {
   return <span className={`material-symbols-outlined ${className ?? ""}`}>{name}</span>;
 }
 
-const categories = [
-  { icon: "", label: "Todos" },
-  { icon: "devices", label: "Tech" },
-  { icon: "chair", label: "Casa" },
-  { icon: "styler", label: "Moda" },
-  { icon: "sports_esports", label: "Geek" },
-  { icon: "child_care", label: "Kids" },
-  { icon: "bolt", label: "Relâmpago" },
-];
+// ─── Helpers ───
 
-const groups = [
-  {
-    members: "12.5k",
-    badge: "TECH",
-    title: "Tech & Gadgets",
-    desc: "Smartphones, notebooks, fones e periféricos.",
-    freq: "Alta",
-    freqIcon: "bolt",
-    status: "Vagas Abertas",
-    statusIcon: "check_circle",
-    statusColor: "text-primary",
-    category: "Tech",
-    whatsappLink: "https://chat.whatsapp.com/tech-gadgets",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuAhNY72LfKZksZd-IVyeB-FXUjfqELwk09AEuawTiGW5Rot48tZgh_kcngKNrtFGWGCYxwmaaVqyyT3tzklcdK0SLKxrTu5mVZF75mZ1Q0Iv8-dEJd0CMupC1gDbE1SVUkBiuZIfPQ9K8tK4iAoh_gxzMao2Tk3BEsXt87JsTg1HB87OX4iK9zW3xTq7k2OglFF4gHsVJ7AYfjHystf18Pe--IMoAXcAFsm3YvxvnKHJIkIQ4eDkfzqkKJOl6xfKblPhxTE1-QBDfg",
-  },
-  {
-    members: "8.2k",
-    badge: "CASA",
-    title: "Casa & Decoração",
-    desc: "Eletrodomésticos, móveis e utilidades.",
-    freq: "Média",
-    freqIcon: "schedule",
-    status: "Vagas Abertas",
-    statusIcon: "check_circle",
-    statusColor: "text-primary",
-    category: "Casa",
-    whatsappLink: "https://chat.whatsapp.com/casa-decoracao",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuALM6hsjARZJKKCUNaumrdmztw47-wS__diwuhYBuGBHHAtZ9kSKngJCSLm7RX9-hpW_bx0Huej6PpJJeZEg4_TeuK9zdxp8GllTdj006UGv4zqjOSBrfHI36J7u8y-JFM_ukO9GqpJGDXCwexFntTTGlk4-TyKZu_BpaifZHzeSFs4sQfdcN3KXQ1jNVo_mXGV40vFGh8UVYGWBElaWWsM2GT5AW5AKXBbdWGOiHrNvvYdmwjDg4f-3mud_te1WHI0qk1yMfnkoHk",
-  },
-  {
-    members: "15k",
-    badge: "MODA",
-    title: "Moda & Estilo",
-    desc: "Roupas, calçados e acessórios em promoção.",
-    freq: "Alta",
-    freqIcon: "bolt",
-    status: "Últimas Vagas",
-    statusIcon: "warning",
-    statusColor: "text-yellow-400",
-    category: "Moda",
-    whatsappLink: "https://chat.whatsapp.com/moda-estilo",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuC_XeQMP91SgqErP_8RDQB9Q43SQJ1ct2qFel-rx2twjYHzKMuZMjlUfaie8jWnMFuX723nbQwLfNY7uxZRWH9XBIe3kK2s7fRNE95CX8sELWyW1OYdO9ygLWxAu1eB14_fpKaY9iR8Nbw3wZNb4VRfEi1nXnyD3IVwY4oiHrFnJ9l_niggVnKAcj42vPzjma-FmDqSvflQwo68WaTwg017FOCdgOOWHW4C-K2sMMmFjK16NspACfQO_xQI-nmu1UXRsM9gPAELEf0",
-  },
-  {
-    members: "6.8k",
-    badge: "GEEK",
-    title: "Mundo Geek",
-    desc: "Jogos, HQs, colecionáveis e cultura pop.",
-    freq: "Média",
-    freqIcon: "schedule",
-    status: "Vagas Abertas",
-    statusIcon: "check_circle",
-    statusColor: "text-primary",
-    category: "Geek",
-    whatsappLink: "https://chat.whatsapp.com/mundo-geek",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBgUExWKACGQ9G3UGpu052KEhwJzub9YEI5QdCPyxLvlmeCD0z0qG0TSpjsCCahY38rDhgnq89xuGowaYfMGsHcWy55Qc5zJByCbW-MAle4VSXV49UJimxCkWgQ8F1mjzu9Ux7jPfrJZRUze9zkvx-VwNF1Sbx1HnTONYLNeYbJ35vM4-JCA00xIla5B4gAhs1BZnvNRaH7FWvTLZdfdJEFULrg3Oiz7c8sfk7_AX0GEZIfCGZCSVcvZ18nbE30q9ZtWkxFaEdjO6s",
-  },
-  {
-    members: "22k",
-    badge: "HOT",
-    title: "Promoções Relâmpago",
-    desc: "Erros de preço, cupons limitados e ofertas rápidas.",
-    freq: "Muito Alta",
-    freqIcon: "local_fire_department",
-    status: "Lista de Espera",
-    statusIcon: "lock",
-    statusColor: "text-destructive",
-    category: "Relâmpago",
-    whatsappLink: "",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBMTOBnD9D7YAgV5JiibWbGnyNUa_smmNJjoWplQVap197IFSfia4lnuKm3NfWkKNcrW4Gwn0YaZ_Kl3cTyyXpkEYrBGOzBT4dBtlNZul7EcCRlHmenzQ4nunnNEAK99PziGLIhv_wVrkSGNjQZu6uT4em-TJ0LqygVRVUynYuUk_PwtEsHf4kusNUKrwRqv6fKAlcO3Gowgy8zCTKhXA5r9nBMn5qqe1Oi9PV92Z5ZJphkboeyYYVaAXGUF1GWwdPMwiP6ZRRrBGw",
-  },
-  {
-    members: "5.4k",
-    badge: "KIDS",
-    title: "Universo Kids",
-    desc: "Brinquedos, fraldas e roupas infantis.",
-    freq: "Média",
-    freqIcon: "schedule",
-    status: "Vagas Abertas",
-    statusIcon: "check_circle",
-    statusColor: "text-primary",
-    category: "Kids",
-    whatsappLink: "https://chat.whatsapp.com/universo-kids",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCZyr7tllNSBKc-562yI1RZ_8mX0q_m8xcnq3sDfhAWRNf3uWJ3wQ7nR7F2dmjKKNiE6W6I5shKMbO1bowCK9lPjMhPqUxbGKkb7UWD23ksD7YDkztGuNawy3X-hQweQ5bDJT56UE5efHUOATAK33cJE8ghEU7QYoq_Nq1S-mUC4j9VcLmgv9Bcs-XHV6GsYJY4lPlcoKxtw5BrcBv0NZO002lNqMjLb9nytj9jD3oE1pLNgp0Zj5wvv2MMKhQXDFNyTJgl7YUg8fo",
-  },
-];
+function getTrafficLight(count: number, max: number, isFull: boolean) {
+  const pct = max > 0 ? (count / max) * 100 : 0;
+  if (isFull || pct >= 100)
+    return { dot: "bg-red-500", glow: "shadow-[0_0_8px_#ef4444]", label: "Lista de Espera", text: "text-red-400" };
+  if (pct >= 80)
+    return { dot: "bg-yellow-500", glow: "shadow-[0_0_8px_#eab308]", label: "Últimas Vagas", text: "text-yellow-400" };
+  return { dot: "bg-green-500", glow: "shadow-[0_0_8px_#22c55e]", label: "Vagas Abertas", text: "text-green-400" };
+}
+
+function formatMembers(n: number): string {
+  if (n >= 1000) {
+    const v = n / 1000;
+    return v % 1 === 0 ? `${v}k` : `${v.toFixed(1)}k`;
+  }
+  return String(n);
+}
+
+const categoryImageMap: Record<string, string> = {
+  Tech: "https://lh3.googleusercontent.com/aida-public/AB6AXuAhNY72LfKZksZd-IVyeB-FXUjfqELwk09AEuawTiGW5Rot48tZgh_kcngKNrtFGWGCYxwmaaVqyyT3tzklcdK0SLKxrTu5mVZF75mZ1Q0Iv8-dEJd0CMupC1gDbE1SVUkBiuZIfPQ9K8tK4iAoh_gxzMao2Tk3BEsXt87JsTg1HB87OX4iK9zW3xTq7k2OglFF4gHsVJ7AYfjHystf18Pe--IMoAXcAFsm3YvxvnKHJIkIQ4eDkfzqkKJOl6xfKblPhxTE1-QBDfg",
+  Casa: "https://lh3.googleusercontent.com/aida-public/AB6AXuALM6hsjARZJKKCUNaumrdmztw47-wS__diwuhYBuGBHHAtZ9kSKngJCSLm7RX9-hpW_bx0Huej6PpJJeZEg4_TeuK9zdxp8GllTdj006UGv4zqjOSBrfHI36J7u8y-JFM_ukO9GqpJGDXCwexFntTTGlk4-TyKZu_BpaifZHzeSFs4sQfdcN3KXQ1jNVo_mXGV40vFGh8UVYGWBElaWWsM2GT5AW5AKXBbdWGOiHrNvvYdmwjDg4f-3mud_te1WHI0qk1yMfnkoHk",
+  Moda: "https://lh3.googleusercontent.com/aida-public/AB6AXuC_XeQMP91SgqErP_8RDQB9Q43SQJ1ct2qFel-rx2twjYHzKMuZMjlUfaie8jWnMFuX723nbQwLfNY7uxZRWH9XBIe3kK2s7fRNE95CX8sELWyW1OYdO9ygLWxAu1eB14_fpKaY9iR8Nbw3wZNb4VRfEi1nXnyD3IVwY4oiHrFnJ9l_niggVnKAcj42vPzjma-FmDqSvflQwo68WaTwg017FOCdgOOWHW4C-K2sMMmFjK16NspACfQO_xQI-nmu1UXRsM9gPAELEf0",
+  Geek: "https://lh3.googleusercontent.com/aida-public/AB6AXuBgUExWKACGQ9G3UGpu052KEhwJzub9YEI5QdCPyxLvlmeCD0z0qG0TSpjsCCahY38rDhgnq89xuGowaYfMGsHcWy55Qc5zJByCbW-MAle4VSXV49UJimxCkWgQ8F1mjzu9Ux7jPfrJZRUze9zkvx-VwNF1Sbx1HnTONYLNeYbJ35vM4-JCA00xIla5B4gAhs1BZnvNRaH7FWvTLZdfdJEFULrg3Oiz7c8sfk7_AX0GEZIfCGZCSVcvZ18nbE30q9ZtWkxFaEdjO6s",
+  Kids: "https://lh3.googleusercontent.com/aida-public/AB6AXuCZyr7tllNSBKc-562yI1RZ_8mX0q_m8xcnq3sDfhAWRNf3uWJ3wQ7nR7F2dmjKKNiE6W6I5shKMbO1bowCK9lPjMhPqUxbGKkb7UWD23ksD7YDkztGuNawy3X-hQweQ5bDJT56UE5efHUOATAK33cJE8ghEU7QYoq_Nq1S-mUC4j9VcLmgv9Bcs-XHV6GsYJY4lPlcoKxtw5BrcBv0NZO002lNqMjLb9nytj9jD3oE1pLNgp0Zj5wvv2MMKhQXDFNyTJgl7YUg8fo",
+  Relâmpago: "https://lh3.googleusercontent.com/aida-public/AB6AXuBMTOBnD9D7YAgV5JiibWbGnyNUa_smmNJjoWplQVap197IFSfia4lnuKm3NfWkKNcrW4Gwn0YaZ_Kl3cTyyXpkEYrBGOzBT4dBtlNZul7EcCRlHmenzQ4nunnNEAK99PziGLIhv_wVrkSGNjQZu6uT4em-TJ0LqygVRVUynYuUk_PwtEsHf4kusNUKrwRqv6fKAlcO3Gowgy8zCTKhXA5r9nBMn5qqe1Oi9PV92Z5ZJphkboeyYYVaAXGUF1GWwdPMwiP6ZRRrBGw",
+};
+
+const defaultImage = "https://lh3.googleusercontent.com/aida-public/AB6AXuBMTOBnD9D7YAgV5JiibWbGnyNUa_smmNJjoWplQVap197IFSfia4lnuKm3NfWkKNcrW4Gwn0YaZ_Kl3cTyyXpkEYrBGOzBT4dBtlNZul7EcCRlHmenzQ4nunnNEAK99PziGLIhv_wVrkSGNjQZu6uT4em-TJ0LqygVRVUynYuUk_PwtEsHf4kusNUKrwRqv6fKAlcO3Gowgy8zCTKhXA5r9nBMn5qqe1Oi9PV92Z5ZJphkboeyYYVaAXGUF1GWwdPMwiP6ZRRrBGw";
+
+const categoryIconMap: Record<string, string> = {
+  Tech: "devices",
+  Casa: "chair",
+  Moda: "styler",
+  Geek: "sports_esports",
+  Kids: "child_care",
+  Relâmpago: "bolt",
+};
 
 export default function Groups() {
   const navigate = useNavigate();
@@ -112,17 +59,51 @@ export default function Groups() {
   const [searchQuery, setSearchQuery] = useState("");
   const [email, setEmail] = useState("");
 
+  const { data: groups = [], isLoading } = useQuery({
+    queryKey: ["public-whatsapp-groups"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("whatsapp_groups")
+        .select("id, group_name, group_description, categories, participant_count, max_participants, is_full, invite_link, is_flash_deals_only, messages_sent, updated_at")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 1000 * 60 * 60,
+  });
+
+  // Build dynamic categories from data
+  const dynamicCategories = (() => {
+    const cats = new Set<string>();
+    groups.forEach((g) => g.categories?.forEach((c) => cats.add(c)));
+    // Add flash deals as "Relâmpago" if any
+    if (groups.some((g) => g.is_flash_deals_only)) cats.add("Relâmpago");
+    const arr = Array.from(cats).map((label) => ({ icon: categoryIconMap[label] || "", label }));
+    return [{ icon: "", label: "Todos" }, ...arr];
+  })();
+
   const filteredGroups = groups.filter((g) => {
-    const matchesCategory = activeCategory === "Todos" || g.category === activeCategory;
-    const matchesSearch = !searchQuery || g.title.toLowerCase().includes(searchQuery.toLowerCase()) || g.desc.toLowerCase().includes(searchQuery.toLowerCase());
+    const groupCats = g.categories ?? [];
+    const isFlash = g.is_flash_deals_only;
+    const matchesCategory =
+      activeCategory === "Todos" ||
+      groupCats.includes(activeCategory) ||
+      (activeCategory === "Relâmpago" && isFlash);
+    const matchesSearch =
+      !searchQuery ||
+      g.group_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (g.group_description ?? "").toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
   const handleCta = (g: (typeof groups)[0]) => {
-    if (g.status === "Lista de Espera") {
+    const tl = getTrafficLight(g.participant_count ?? 0, g.max_participants ?? 1024, !!g.is_full);
+    if (tl.label === "Lista de Espera") {
       toast.success("Você será avisado quando abrir vaga!");
+    } else if (g.invite_link) {
+      window.open(g.invite_link, "_blank");
     } else {
-      window.open(g.whatsappLink, "_blank");
+      toast.info("Link de convite indisponível no momento.");
     }
   };
 
@@ -133,6 +114,17 @@ export default function Groups() {
     }
     toast.success("Inscrição realizada com sucesso!");
     setEmail("");
+  };
+
+  const getImage = (g: (typeof groups)[0]) => {
+    const cat = g.categories?.[0];
+    if (g.is_flash_deals_only) return categoryImageMap["Relâmpago"] ?? defaultImage;
+    return (cat ? categoryImageMap[cat] : undefined) ?? defaultImage;
+  };
+
+  const getBadge = (g: (typeof groups)[0]) => {
+    if (g.is_flash_deals_only) return "HOT";
+    return g.categories?.[0]?.toUpperCase() ?? "PROMO";
   };
 
   return (
@@ -160,7 +152,6 @@ export default function Groups() {
 
       {/* ─── MAIN ─── */}
       <main className="flex-1 flex flex-col items-center w-full px-4 sm:px-10 pt-28 pb-12 relative overflow-hidden">
-        {/* Background glows */}
         <div className="pointer-events-none absolute top-0 left-1/4 w-96 h-96 rounded-full bg-secondary/20 blur-[100px]" />
         <div className="pointer-events-none absolute bottom-0 right-1/4 w-96 h-96 rounded-full bg-primary/10 blur-[100px]" />
 
@@ -198,7 +189,7 @@ export default function Groups() {
 
           {/* ─── CATEGORY PILLS ─── */}
           <div className="flex gap-3 flex-wrap justify-center">
-            {categories.map((cat) => (
+            {dynamicCategories.map((cat) => (
               <button
                 key={cat.label}
                 onClick={() => setActiveCategory(cat.label)}
@@ -216,91 +207,127 @@ export default function Groups() {
 
           {/* ─── GROUPS GRID ─── */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
-            {filteredGroups.map((g) => {
-              const isWaitlist = g.status === "Lista de Espera";
-              return (
-                <div
-                  key={g.title}
-                  className={`flex flex-col rounded-xl overflow-hidden border border-border/50 bg-card/40 backdrop-blur-sm group hover:-translate-y-2 transition-all duration-300 hover:shadow-2xl hover:shadow-secondary/10 ${
-                    isWaitlist ? "hover:shadow-destructive/10" : ""
-                  }`}
-                >
-                  {/* Image Header */}
-                  <div
-                    className="h-40 w-full bg-cover bg-center relative"
-                    style={{ backgroundImage: `url('${g.image}')` }}
-                  >
-                    <div className="absolute inset-0 bg-background/30 group-hover:bg-transparent transition-colors duration-300" />
-                    {/* Member count badge */}
-                    <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-md rounded-full px-3 py-1 flex items-center gap-1 border border-border/50">
-                      <MaterialIcon name="group" className="text-[16px] text-primary" />
-                      <span className="text-xs font-bold">{g.members}</span>
+            {isLoading
+              ? Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex flex-col rounded-xl overflow-hidden border border-border/50 bg-card/40">
+                    <Skeleton className="h-40 w-full" />
+                    <div className="p-6 flex flex-col gap-4">
+                      <Skeleton className="h-6 w-3/4" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-12 w-full" />
                     </div>
-                    {/* Category badge on image */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent flex items-end p-4">
+                  </div>
+                ))
+              : filteredGroups.map((g) => {
+                  const pCount = g.participant_count ?? 0;
+                  const maxP = g.max_participants ?? 1024;
+                  const tl = getTrafficLight(pCount, maxP, !!g.is_full);
+                  const isWaitlist = tl.label === "Lista de Espera";
+                  const badge = getBadge(g);
+                  const image = getImage(g);
+
+                  return (
+                    <div
+                      key={g.id}
+                      className={`flex flex-col rounded-xl overflow-hidden border border-border/50 bg-card/40 backdrop-blur-sm group hover:-translate-y-2 transition-all duration-300 hover:shadow-2xl hover:shadow-secondary/10 ${
+                        isWaitlist ? "hover:shadow-destructive/10" : ""
+                      }`}
+                    >
+                      {/* Image Header */}
                       <div
-                        className={`text-xs font-bold px-2 py-1 rounded border border-border/30 backdrop-blur ${
-                          isWaitlist
-                            ? "bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/30"
-                            : "bg-secondary/90 text-secondary-foreground shadow-lg shadow-secondary/20"
-                        }`}
+                        className="h-40 w-full bg-cover bg-center relative"
+                        style={{ backgroundImage: `url('${image}')` }}
                       >
-                        {g.badge}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Body */}
-                  <div className="p-6 flex flex-col gap-4 flex-1">
-                    <div>
-                      <h3 className={`text-xl font-bold leading-tight mb-2 transition-colors ${isWaitlist ? "group-hover:text-destructive" : "group-hover:text-primary"}`}>
-                        {g.title}
-                      </h3>
-                      <p className="text-muted-foreground text-sm">{g.desc}</p>
-                    </div>
-
-                    {/* Frequency & Status */}
-                    <div className="flex items-center gap-4 py-3 border-t border-b border-border/30">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Frequência</span>
-                        <div className="flex items-center gap-1">
-                          <MaterialIcon name={g.freqIcon} className={`text-[16px] ${isWaitlist ? "text-destructive" : "text-primary"}`} />
-                          <span className="text-xs font-bold">{g.freq}</span>
+                        <div className="absolute inset-0 bg-background/30 group-hover:bg-transparent transition-colors duration-300" />
+                        {/* Member count + updated_at badges */}
+                        <div className="absolute top-4 right-4 flex flex-col items-end gap-1">
+                          <div className="bg-background/80 backdrop-blur-md rounded-full px-3 py-1 flex items-center gap-1 border border-border/50">
+                            <MaterialIcon name="group" className="text-[16px] text-primary" />
+                            <span className="text-xs font-bold">{formatMembers(pCount)}</span>
+                          </div>
+                          {g.updated_at && (
+                            <div className="bg-background/80 backdrop-blur-md rounded-full px-2 py-0.5 flex items-center gap-1 border border-border/50">
+                              <MaterialIcon name="schedule" className="text-[12px] text-muted-foreground" />
+                              <span className="text-[10px] text-muted-foreground">
+                                {formatDistanceToNow(new Date(g.updated_at), { addSuffix: true, locale: ptBR })}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {/* Category badge */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent flex items-end p-4">
+                          <div
+                            className={`text-xs font-bold px-2 py-1 rounded border border-border/30 backdrop-blur ${
+                              isWaitlist
+                                ? "bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/30"
+                                : "bg-secondary/90 text-secondary-foreground shadow-lg shadow-secondary/20"
+                            }`}
+                          >
+                            {badge}
+                          </div>
                         </div>
                       </div>
-                      <div className="w-px h-8 bg-border/30" />
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Status</span>
-                        <div className="flex items-center gap-1">
-                          <MaterialIcon name={g.statusIcon} className={`text-[16px] ${g.statusColor}`} />
-                          <span className="text-xs font-bold">{g.status}</span>
+
+                      {/* Card Body */}
+                      <div className="p-6 flex flex-col gap-4 flex-1">
+                        <div>
+                          <h3 className={`text-xl font-bold leading-tight mb-2 transition-colors ${isWaitlist ? "group-hover:text-destructive" : "group-hover:text-primary"}`}>
+                            {g.group_name}
+                          </h3>
+                          <p className="text-muted-foreground text-sm">{g.group_description}</p>
                         </div>
+
+                        {/* Frequency & Status with Traffic Light */}
+                        <div className="flex items-center gap-4 py-3 border-t border-b border-border/30">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Mensagens</span>
+                            <div className="flex items-center gap-1">
+                              <MaterialIcon name="chat" className="text-[16px] text-primary" />
+                              <span className="text-xs font-bold">{formatMembers(g.messages_sent ?? 0)}</span>
+                            </div>
+                          </div>
+                          <div className="w-px h-8 bg-border/30" />
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Status</span>
+                            <div className="flex items-center gap-1.5">
+                              <div className={`h-3 w-3 rounded-full animate-pulse ${tl.dot} ${tl.glow}`} />
+                              <span className={`text-xs font-bold ${tl.text}`}>{tl.label}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* CTA Button */}
+                        {isWaitlist ? (
+                          <button
+                            onClick={() => handleCta(g)}
+                            className="mt-auto flex w-full cursor-pointer items-center justify-center rounded-lg h-12 px-4 bg-muted/50 text-muted-foreground font-bold text-sm uppercase tracking-wider gap-2 hover:bg-muted transition-colors"
+                          >
+                            <MaterialIcon name="notifications_active" className="text-[20px]" />
+                            <span>Avisar Vaga</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleCta(g)}
+                            className="mt-auto flex w-full cursor-pointer items-center justify-center rounded-lg h-12 px-4 bg-primary text-primary-foreground font-black text-sm uppercase tracking-wider transition-all duration-300 gap-2 hover:shadow-[0_0_15px_hsl(var(--primary)/0.4)]"
+                          >
+                            <MaterialIcon name="chat" className="text-[20px]" />
+                            <span>Entrar Agora</span>
+                          </button>
+                        )}
                       </div>
                     </div>
-
-                    {/* CTA Button */}
-                    {isWaitlist ? (
-                      <button
-                        onClick={() => handleCta(g)}
-                        className="mt-auto flex w-full cursor-pointer items-center justify-center rounded-lg h-12 px-4 bg-muted/50 text-muted-foreground font-bold text-sm uppercase tracking-wider gap-2 hover:bg-muted transition-colors"
-                      >
-                        <MaterialIcon name="notifications_active" className="text-[20px]" />
-                        <span>Avisar Vaga</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleCta(g)}
-                        className="mt-auto flex w-full cursor-pointer items-center justify-center rounded-lg h-12 px-4 bg-primary text-primary-foreground font-black text-sm uppercase tracking-wider transition-all duration-300 gap-2 hover:shadow-[0_0_15px_hsl(var(--primary)/0.4)]"
-                      >
-                        <MaterialIcon name="chat" className="text-[20px]" />
-                        <span>Entrar Agora</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
           </div>
+
+          {/* Empty state */}
+          {!isLoading && filteredGroups.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <MaterialIcon name="search_off" className="text-5xl mb-3" />
+              <p className="text-lg font-medium">Nenhum grupo encontrado</p>
+              <p className="text-sm">Tente outra categoria ou termo de busca.</p>
+            </div>
+          )}
 
           {/* ─── NEWSLETTER ─── */}
           <div className="mt-12 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left relative overflow-hidden group">
