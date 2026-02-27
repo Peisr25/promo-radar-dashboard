@@ -113,8 +113,8 @@ export default function LandingPage() {
           <div className="hidden items-center gap-6 md:flex">
             <a href="/" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={activeSection === "inicio" ? "text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5" : "text-sm text-muted-foreground hover:text-foreground transition-colors"}>Início</a>
             <a href="#tecnologia" className={activeSection === "tecnologia" ? "text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5" : "text-sm text-muted-foreground hover:text-foreground transition-colors"}>Tecnologia</a>
-            <button onClick={() => navigate("/grupos")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Grupos</button>
             <a href="#confianca" className={activeSection === "confianca" ? "text-sm text-foreground font-bold border-b-2 border-secondary pb-0.5" : "text-sm text-muted-foreground hover:text-foreground transition-colors"}>Segurança</a>
+            <button onClick={() => navigate("/grupos")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Grupos</button>
           </div>
           <Button size="sm" variant="outline" className="border-secondary/30 text-secondary hover:bg-secondary/10" onClick={() => navigate("/admin")}>
             Entrar
