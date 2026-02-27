@@ -253,7 +253,7 @@ export default function LandingPage() {
                   className={`min-w-[340px] snap-start rounded-2xl p-8 flex flex-col gap-6 transition-all ${
                     ch.highlighted
                       ? "relative overflow-hidden border border-secondary/20"
-                      : "bg-white/5 backdrop-blur-md border border-white/10 hover:border-secondary/40"
+                      : "bg-card/5 backdrop-blur-md border border-border/20 hover:border-secondary/40"
                   }`}
                 >
                   {ch.highlighted && (
