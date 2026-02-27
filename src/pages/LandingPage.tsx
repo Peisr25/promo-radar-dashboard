@@ -25,7 +25,7 @@ const channels = [
     highlighted: false,
   },
   {
-    icon: "smart_outlet",
+    icon: "styler",
     title: "Moda",
     description: "Roupas, Calçados, Acessórios, Bolsas e Tendências de temporada.",
     cta: "Entrar no Canal",
