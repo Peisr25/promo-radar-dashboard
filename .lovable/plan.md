@@ -1,63 +1,53 @@
 
 
-## Adicionar botao "Gerar Grupos Iniciais (API)" no WhatsAppSettings
+## Agendamento Automatico - Sync de Participantes a Cada 3 Horas
 
-### Resumo
+### O que sera feito
 
-O botao solicitado nao existe ainda na pagina. Vamos adiciona-lo ao `src/pages/WhatsAppSettings.tsx` com a logica de gerar os 8 grupos pre-definidos via Edge Function.
+Configurar um cron job que roda a cada 3 horas para sincronizar automaticamente a contagem de participantes de todos os grupos WhatsApp de todos os usuarios.
 
-### Implementacao
+### Alteracoes
 
-**Ficheiro:** `src/pages/WhatsAppSettings.tsx`
+#### 1. Edge Function `manage-whatsapp-groups` - Nova action `cron_sync_all`
 
-#### 1. Novo estado
+Adicionar uma nova action que:
+- Nao exige autenticacao de usuario (sera chamada pelo cron com anon key)
+- Valida que a chamada vem do cron verificando um header especial ou simplesmente usando service_role internamente
+- Busca TODOS os usuarios com `evolution_config` ativa
+- Para cada usuario, executa a logica de `sync_counts` existente (busca grupos da Evolution API e atualiza contagens no banco)
+- Retorna um resumo global (total de usuarios processados, grupos atualizados)
 
-Adicionar estado para controlar o fluxo:
-- `seedingGroups` (boolean) - loading state
-- `seedAdminNumber` (string) - numero do admin
-- `seedDialogOpen` (boolean) - modal de confirmacao
-
-#### 2. Array de grupos pre-definidos
-
-Constante `SEED_GROUPS` com os 8 grupos exatos:
-
+Fluxo simplificado:
 ```text
-const SEED_GROUPS = [
-  { name: 'Radar das Promos TECH #01', categories: ['Tech'], is_flash_deals_only: false },
-  { name: 'Radar das Promos CASA #01', categories: ['Casa'], is_flash_deals_only: false },
-  { name: 'Radar das Promos MODA #01', categories: ['Moda'], is_flash_deals_only: false },
-  { name: 'Radar das Promos GEEK #01', categories: ['Geek'], is_flash_deals_only: false },
-  { name: 'Radar das Promos RELAMPAGO #01', categories: ['Relampago'], is_flash_deals_only: true },
-  { name: 'Radar das Promos KIDS #01', categories: ['Kids'], is_flash_deals_only: false },
-  { name: 'Radar das Promos GERAL #01', categories: ['Geral'], is_flash_deals_only: false },
-  { name: 'Radar das Promos SHOPEE #01', categories: ['Achadinhos da Shopee'], is_flash_deals_only: false },
-];
+cron_sync_all ->
+  1. adminClient busca todos evolution_config onde is_active = true
+  2. Para cada config (usuario):
+     a. Chama Evolution API fetchAllGroups
+     b. Busca whatsapp_groups do usuario no banco
+     c. Atualiza participant_count e is_full
+  3. Retorna resumo
 ```
 
-#### 3. Funcao `handleSeedGroups`
+A action `cron_sync_all` sera acionada quando o body contiver `{"action": "cron_sync_all"}`. Neste caso, o bloco de autenticacao de usuario sera pulado (early return antes do getClaims).
 
-- Validar que `seedAdminNumber` nao esta vazio
-- Iterar sobre `SEED_GROUPS`, chamando `supabase.functions.invoke("manage-whatsapp-groups", { body: { action: "create", name, admin_number, categories, is_flash_deals_only } })` para cada grupo
-- Contar sucessos e falhas
-- Mostrar toast com resultado
-- Fechar modal e recarregar grupos
+#### 2. Cron Job via pg_cron + pg_net
 
-#### 4. UI - Botao e Modal
+Executar SQL (via insert tool, nao migration) para:
+- Habilitar extensoes `pg_cron` e `pg_net` (se ainda nao habilitadas)
+- Criar o schedule `sync-group-counts-every-3h` com expressao `0 */3 * * *`
+- O job faz um POST para a edge function com `{"action": "cron_sync_all"}` e o anon key no header Authorization
 
-Adicionar um botao ao lado dos existentes na barra de acoes do card de grupos:
-```text
-<Button size="sm" variant="outline" onClick={() => setSeedDialogOpen(true)}>
-  <Sparkles /> Gerar Grupos Iniciais (API)
-</Button>
-```
+### Secao Tecnica
 
-Modal (Dialog) pedindo apenas o numero do admin (formato internacional, ex: 5511999999999), com botao de confirmacao que executa `handleSeedGroups`.
+**Ficheiros alterados:**
+- `supabase/functions/manage-whatsapp-groups/index.ts` - adicionar action `cron_sync_all` com bypass de auth
 
-#### 5. Atualizacao do CATEGORY_OPTIONS
+**SQL executado (insert tool):**
+- Habilitar extensoes pg_cron e pg_net
+- Criar cron schedule apontando para a URL da edge function
 
-Adicionar 'Relampago', 'Achadinhos da Shopee' ao array `CATEGORY_OPTIONS` para que possam ser usados em edicoes futuras.
-
-### Ficheiros alterados
-
-- `src/pages/WhatsAppSettings.tsx` (unico ficheiro)
+**Seguranca:**
+- A action `cron_sync_all` usa internamente o `service_role_key` para acessar dados de todos os usuarios
+- Nao expoe dados sensiveis na resposta
+- A anon key no header e suficiente pois `verify_jwt = false` ja esta configurado
 
