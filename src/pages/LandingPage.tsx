@@ -26,7 +26,7 @@ const channels = [
   },
   {
     icon: "smart_outlet",
-    title: "Smart Home",
+    title: "Moda",
     description: "Automação residencial, Robôs aspiradores, Assistentes virtuais e Segurança.",
     cta: "Entrar no Canal",
     highlighted: false,
