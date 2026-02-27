@@ -122,10 +122,6 @@ export default function Groups() {
     return (cat ? categoryImageMap[cat] : undefined) ?? defaultImage;
   };
 
-  const getBadge = (g: (typeof groups)[0]) => {
-    if (g.is_flash_deals_only) return "HOT";
-    return g.categories?.[0]?.toUpperCase() ?? "PROMO";
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
@@ -223,7 +219,7 @@ export default function Groups() {
                   const maxP = g.max_participants ?? 1024;
                   const tl = getTrafficLight(pCount, maxP, !!g.is_full);
                   const isWaitlist = tl.label === "Lista de Espera";
-                  const badge = getBadge(g);
+                  
                   const image = getImage(g);
 
                   return (
@@ -256,14 +252,24 @@ export default function Groups() {
                         </div>
                         {/* Category badge */}
                         <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent flex items-end p-4">
-                          <div
-                            className={`text-xs font-bold px-2 py-1 rounded border border-border/30 backdrop-blur ${
-                              isWaitlist
-                                ? "bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/30"
-                                : "bg-secondary/90 text-secondary-foreground shadow-lg shadow-secondary/20"
-                            }`}
-                          >
-                            {badge}
+                          <div className="flex flex-wrap gap-1.5">
+                            {(g.categories?.length ? g.categories : ["Geral"]).map((cat) => (
+                              <div
+                                key={cat}
+                                className={`text-xs font-bold px-2 py-1 rounded border border-border/30 backdrop-blur ${
+                                  isWaitlist
+                                    ? "bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/30"
+                                    : "bg-secondary/90 text-secondary-foreground shadow-lg shadow-secondary/20"
+                                }`}
+                              >
+                                {cat.toUpperCase()}
+                              </div>
+                            ))}
+                            {g.is_flash_deals_only && (
+                              <div className="text-xs font-bold px-2 py-1 rounded border border-border/30 backdrop-blur bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/30">
+                                HOT
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
