@@ -20,8 +20,7 @@ const BASE_CATEGORIES = [
 ];
 
 // Capitalize first letter of each word for consistent display
-const titleCase = (s: string) =>
-  s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+const titleCase = (s: string) => s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -29,7 +28,7 @@ serve(async (req) => {
   }
 
   try {
-    const { products } = await req.json() as {
+    const { products } = (await req.json()) as {
       products: { id: number; product_title: string }[];
     };
 
@@ -43,22 +42,48 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Build numbered list of titles
-    const numberedList = products
-      .map((p, i) => `${i + 1}. ${p.product_title}`)
-      .join("\n");
+    // Instancia o Supabase no início para podermos ler as categorias existentes
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // 1. Busca os últimos 2000 produtos para descobrir quais categorias já existem no banco
+    const { data: recentScrapes } = await supabase
+      .from("raw_scrapes")
+      .select("metadata")
+      .order("created_at", { ascending: false })
+      .limit(2000);
+
+    // 2. Cria um Set (lista sem repetições) unindo as BASE_CATEGORIES com as do banco
+    const dynamicCategories = new Set<string>(BASE_CATEGORIES);
+    recentScrapes?.forEach((row) => {
+      const meta = row.metadata as Record<string, unknown> | null;
+      if (meta && typeof meta.categoria === "string" && meta.categoria.trim() !== "") {
+        dynamicCategories.add(titleCase(meta.categoria.trim()));
+      }
+    });
+
+    const existingCategoriesList = Array.from(dynamicCategories).join(", ");
+
+    // Build numbered list of titles
+    const numberedList = products.map((p, i) => `${i + 1}. ${p.product_title}`).join("\n");
+
+    // PROMPT ATUALIZADO: Mais rigoroso e alimentado com o banco de dados em tempo real
     const systemPrompt = `Você é um assistente de e-commerce. Vou te enviar uma lista numerada de títulos de produtos. Para cada um, classifique-o em uma categoria de e-commerce adequada.
 
-Você pode usar estas categorias como base: ${BASE_CATEGORIES.join(", ")}.
-SE nenhuma destas se encaixar perfeitamente (ex: Smartwatches, Fones de Ouvido, Ferramentas, Livros, Brinquedos, etc.), VOCÊ DEVE CRIAR uma nova categoria curta e direta (máximo de 3 palavras).
+CATEGORIAS JÁ EXISTENTES NO SISTEMA:
+${existingCategoriesList}
+
+REGRAS OBRIGATÓRIAS:
+1. PRIORIDADE MÁXIMA: Tente sempre encaixar o produto em uma das categorias já existentes na lista acima.
+2. NÃO CRIE variações de plural/singular (ex: se já existe "Bebê", não crie "Bebês").
+3. NÃO CRIE sinônimos (ex: se já existe "Casa e Móveis", não crie "Casa e Construção").
+4. Crie uma categoria NOVA apenas se o produto for completamente diferente de tudo que já existe (máximo de 3 palavras).
 
 Responda APENAS com o número e a categoria correspondente, uma por linha. Exemplo:
 1. Smartphones
-2. Fones de Ouvido
-3. Ferramentas
-
-Não adicione nenhum texto extra, explicação ou formatação adicional.`;
+2. Casa e Móveis
+3. Ferramentas`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -77,19 +102,17 @@ Não adicione nenhum texto extra, explicação ou formatação adicional.`;
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit excedido. Tente novamente em alguns segundos." }), {
+        return new Response(JSON.stringify({ error: "Rate limit excedido. Tente novamente." }), {
           status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: corsHeaders,
         });
       }
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: "Créditos insuficientes." }), {
           status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: corsHeaders,
         });
       }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
       throw new Error(`AI gateway error: ${response.status}`);
     }
 
@@ -110,11 +133,6 @@ Não adicione nenhum texto extra, explicação ou formatação adicional.`;
       }
     }
 
-    // Update database using service role
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
     let updated = 0;
     let errors = 0;
 
@@ -122,24 +140,16 @@ Não adicione nenhum texto extra, explicação ou formatação adicional.`;
       const category = categoryMap.get(i) ?? "Outros";
       const product = products[i];
 
-      // Fetch existing metadata to merge
-      const { data: existing } = await supabase
-        .from("raw_scrapes")
-        .select("metadata")
-        .eq("id", product.id)
-        .single();
+      const { data: existing } = await supabase.from("raw_scrapes").select("metadata").eq("id", product.id).single();
 
       const existingMeta = (existing?.metadata as Record<string, unknown>) ?? {};
       const newMeta: Record<string, unknown> = { ...existingMeta, categoria: category };
-      // Also update amazon_category if it exists (Amazon products use this field for display)
+
       if (existingMeta.amazon_category !== undefined) {
         newMeta.amazon_category = category;
       }
 
-      const { error } = await supabase
-        .from("raw_scrapes")
-        .update({ metadata: newMeta })
-        .eq("id", product.id);
+      const { error } = await supabase.from("raw_scrapes").update({ metadata: newMeta }).eq("id", product.id);
 
       if (error) {
         console.error(`Error updating product ${product.id}:`, error);
@@ -149,15 +159,14 @@ Não adicione nenhum texto extra, explicação ou formatação adicional.`;
       }
     }
 
-    return new Response(
-      JSON.stringify({ success: true, updated, errors, total: products.length }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: true, updated, errors, total: products.length }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (e) {
     console.error("auto-categorize error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
