@@ -63,9 +63,11 @@ export type Database = {
           custom_ai_options: Json | null
           id: string
           is_active: boolean
+          message_config: Json | null
           min_discount: number
           name: string
-          target_group_id: string
+          target_categories: string[] | null
+          target_group_id: string | null
           updated_at: string
           user_id: string
         }
@@ -76,9 +78,11 @@ export type Database = {
           custom_ai_options?: Json | null
           id?: string
           is_active?: boolean
+          message_config?: Json | null
           min_discount?: number
           name: string
-          target_group_id: string
+          target_categories?: string[] | null
+          target_group_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -89,9 +93,11 @@ export type Database = {
           custom_ai_options?: Json | null
           id?: string
           is_active?: boolean
+          message_config?: Json | null
           min_discount?: number
           name?: string
-          target_group_id?: string
+          target_categories?: string[] | null
+          target_group_id?: string | null
           updated_at?: string
           user_id?: string
         }
