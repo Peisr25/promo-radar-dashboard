@@ -1,61 +1,32 @@
 
 
-## Corrigir Contadores e Watchdog do Motor
+## Limpeza: Remover Edge Function Obsoleta e Documentar Arquitetura Railway
 
-### Problema 1: Contadores misturam produtos com grupos
+### Contexto
 
-O contador `sent` incrementa **por grupo enviado** (linha 431), nao por produto. Resultado: 1 produto enviado a 3 grupos aparece como "3 enviado(s)" no resumo, quando deveria ser "1 produto(s) enviado(s) para 3 grupo(s)".
+O frontend ja chama o Railway corretamente via `fetch()` em `Automations.tsx` (linha 141-150). No entanto, a Edge Function `process-automations/index.ts` (573 linhas) ainda existe no projeto, o que pode causar confusao ou uso acidental.
 
-**Solucao:** Separar contadores de produto dos contadores de grupo.
+### Alteracoes
 
-- Adicionar `productsSent`, `productsSkipped`, `productsErrors` para rastrear produtos
-- Manter `sent` (renomear para `groupsSentTotal`) para rastrear envios por grupo
-- Incrementar `productsSent` uma vez por scrape processado com sucesso (apos o broadcast loop)
-- Atualizar o log final para mostrar: `"1 produto(s) enviado(s) para 3 grupo(s), 4 ignorado(s)"`
+#### 1. Eliminar a Edge Function `process-automations`
 
-### Problema 2: Watchdog nao protege dentro do broadcast loop
+Apagar o diretorio `supabase/functions/process-automations/` e usar a ferramenta de delete para remover a funcao deployada do backend. Esta funcao ja nao e usada -- todo o processamento e feito pelo Railway.
 
-O check de timeout (linha 180) so executa no inicio de cada iteracao do loop de scrapes. Se um unico scrape demora 80s (geracao IA + 3 grupos x 8s delay), o watchdog nao interrompe.
+#### 2. Adicionar comentario arquitetural em `Automations.tsx`
 
-**Solucao:** Adicionar verificacao de timeout dentro do broadcast loop (antes de enviar para cada grupo):
+Adicionar um bloco de comentario no topo do ficheiro (apos os imports) documentando que:
+- O motor roda no Railway, nao em Edge Functions
+- O frontend apenas dispara via HTTP POST e le os resultados das tabelas
+- Nunca usar `supabase.functions.invoke("process-automations")`
 
-```text
-for (const group of targetGroups) {
-  if (Date.now() - startTime > MAX_EXECUTION_MS) {
-    timedOut = true;
-    break; // Sai do broadcast loop
-  }
-  // ... envio existente
-}
-```
+### Ficheiros afetados
 
-### Alteracoes no ficheiro
+- `supabase/functions/process-automations/index.ts` -- APAGAR (funcao deployada tambem sera removida)
+- `src/pages/Automations.tsx` -- Adicionar comentario arquitetural (2-3 linhas)
 
-`supabase/functions/process-automations/index.ts`:
+### O que NAO muda
 
-1. **Linhas 170-172** -- Adicionar contadores de produto:
-   - `let productsSent = 0;`
-   - `let productsSkipped = 0;`
-   - `let productsErrors = 0;`
-
-2. **Linha 242 (skipped)** -- Adicionar `productsSkipped++` junto ao `skipped++` existente
-
-3. **Linha 387-396 (broadcast loop)** -- Adicionar check de timeout antes de cada envio de grupo
-
-4. **Linha 431** -- Manter `sent++` como contagem de grupos, mas adicionar `productsSent++` apos o broadcast loop (linha ~475, antes do update de status)
-
-5. **Linhas 481-499 (catch do scrape)** -- Adicionar `productsErrors++`
-
-6. **Linha 509 (log final)** -- Alterar mensagem para:
-   `"Motor finalizado em Xs: Y produto(s) -> Z grupo(s), W ignorado(s), E erro(s)"`
-
-7. **Linhas 510-519 (metadata final)** -- Adicionar `products_sent`, `products_skipped`, `products_errors`, `groups_sent_total`
-
-8. **Linhas 522-528 (motor_control update)** -- Usar `productsSent` e `productsSkipped` nos campos `last_run_sent` e `last_run_skipped`
-
-### Resultado esperado
-
-- Log claro: "Motor finalizado em 30s: 1 produto(s) -> 3 grupo(s), 4 ignorado(s), 0 erro(s)"
-- Watchdog protege mesmo dentro do broadcast de um unico produto
-- Contadores em `motor_control` refletem produtos, nao grupos
+- Toda a logica de UI, polling, kill switch, logs, e CRUD de regras continua igual
+- As tabelas `motor_control`, `automation_logs`, `whatsapp_messages_log` continuam a ser lidas pelo frontend
+- A chamada ao Railway em `runEngineMutation` ja esta correta
 
