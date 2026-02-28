@@ -13,6 +13,11 @@ import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2, Square, Setti
 import { AutomationRuleModal } from "@/components/automations/AutomationRuleModal";
 import { AutomationActivityLog } from "@/components/automations/AutomationActivityLog";
 
+/**
+ * ARQUITETURA: O Motor de Envios roda no Railway (FastAPI), NÃO em Edge Functions.
+ * O frontend apenas dispara via HTTP POST (fetch) e lê os resultados das tabelas Supabase.
+ * NUNCA usar supabase.functions.invoke("process-automations") — essa função foi removida.
+ */
 const ALL_CATEGORIES_TOKEN = "__all__";
 
 interface AutomationRule {
