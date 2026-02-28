@@ -1,32 +1,29 @@
 
+# Adicionar Horario Comercial ao Painel do Motor
 
-## Limpeza: Remover Edge Function Obsoleta e Documentar Arquitetura Railway
+## Resumo
+Adicionar dois campos de horario comercial (inicio e termino) ao painel de configuracoes do Motor na pagina de Automacoes, com texto de ajuda sobre grupos de Ofertas Relampago.
 
-### Contexto
+## Alteracoes
 
-O frontend ja chama o Railway corretamente via `fetch()` em `Automations.tsx` (linha 141-150). No entanto, a Edge Function `process-automations/index.ts` (573 linhas) ainda existe no projeto, o que pode causar confusao ou uso acidental.
+### 1. Atualizar interface `MotorControl` (src/pages/Automations.tsx)
+- Adicionar `business_hours_start` e `business_hours_end` ao tipo `MotorControl`
 
-### Alteracoes
+### 2. Adicionar estados para os novos campos
+- Criar `useState` para `businessStart` (default "06:00") e `businessEnd` (default "01:00")
+- Inicializar os valores em `handleOpenSettings` a partir do `motorControl`
 
-#### 1. Eliminar a Edge Function `process-automations`
+### 3. Adicionar inputs no painel de configuracoes
+- Alterar o grid de `sm:grid-cols-3` para `sm:grid-cols-2 lg:grid-cols-3` (ou manter 3 colunas e criar uma segunda linha)
+- Adicionar dois novos campos com `type="time"`:
+  - "Inicio do Horario Comercial" (valor padrao 06:00)
+  - "Termino do Horario Comercial" (valor padrao 01:00)
+- Adicionar texto muted abaixo dos campos: "Grupos marcados como Ofertas Relampago ignoram esta regra e recebem mensagens 24h por dia."
 
-Apagar o diretorio `supabase/functions/process-automations/` e usar a ferramenta de delete para remover a funcao deployada do backend. Esta funcao ja nao e usada -- todo o processamento e feito pelo Railway.
+### 4. Atualizar funcao de salvar (`saveLimitsMutation`)
+- Incluir `business_hours_start` e `business_hours_end` no payload de update e insert
 
-#### 2. Adicionar comentario arquitetural em `Automations.tsx`
-
-Adicionar um bloco de comentario no topo do ficheiro (apos os imports) documentando que:
-- O motor roda no Railway, nao em Edge Functions
-- O frontend apenas dispara via HTTP POST e le os resultados das tabelas
-- Nunca usar `supabase.functions.invoke("process-automations")`
-
-### Ficheiros afetados
-
-- `supabase/functions/process-automations/index.ts` -- APAGAR (funcao deployada tambem sera removida)
-- `src/pages/Automations.tsx` -- Adicionar comentario arquitetural (2-3 linhas)
-
-### O que NAO muda
-
-- Toda a logica de UI, polling, kill switch, logs, e CRUD de regras continua igual
-- As tabelas `motor_control`, `automation_logs`, `whatsapp_messages_log` continuam a ser lidas pelo frontend
-- A chamada ao Railway em `runEngineMutation` ja esta correta
-
+### Detalhes Tecnicos
+- Os campos ja existem na tabela `motor_control` (text, defaults '06:00' e '01:00')
+- O tipo em `types.ts` ja inclui esses campos, portanto nao ha necessidade de migracoes
+- O grid do painel passara a ter 5 campos no total, organizados em duas linhas
