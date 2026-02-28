@@ -560,7 +560,7 @@ export type Database = {
           id: string
           message_text: string
           promotion_id: string | null
-          scrape_id: string | null
+          scrape_id: number | null
           status: string
           user_id: string
         }
@@ -572,7 +572,7 @@ export type Database = {
           id?: string
           message_text: string
           promotion_id?: string | null
-          scrape_id?: string | null
+          scrape_id?: number | null
           status?: string
           user_id: string
         }
@@ -584,7 +584,7 @@ export type Database = {
           id?: string
           message_text?: string
           promotion_id?: string | null
-          scrape_id?: string | null
+          scrape_id?: number | null
           status?: string
           user_id?: string
         }
