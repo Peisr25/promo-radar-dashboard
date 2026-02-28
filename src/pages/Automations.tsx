@@ -38,6 +38,8 @@ interface MotorControl {
   max_messages_per_hour: number | null;
   max_messages_per_day: number | null;
   delay_between_messages: number | null;
+  business_hours_start: string | null;
+  business_hours_end: string | null;
   last_run_at: string | null;
   last_run_sent: number | null;
   last_run_errors: number | null;
@@ -53,6 +55,8 @@ export default function Automations() {
   const [limitPerHour, setLimitPerHour] = useState("");
   const [limitPerDay, setLimitPerDay] = useState("");
   const [delayBetween, setDelayBetween] = useState("8");
+  const [businessStart, setBusinessStart] = useState("06:00");
+  const [businessEnd, setBusinessEnd] = useState("01:00");
 
   // Query motor_control to know if engine is running + settings
   const { data: motorControl } = useQuery({
@@ -212,6 +216,8 @@ export default function Automations() {
           max_messages_per_hour: perHour,
           max_messages_per_day: perDay,
           delay_between_messages: delay,
+          business_hours_start: businessStart,
+          business_hours_end: businessEnd,
         }).eq("id", existing.id);
         if (error) throw error;
       } else {
@@ -220,6 +226,8 @@ export default function Automations() {
           max_messages_per_hour: perHour,
           max_messages_per_day: perDay,
           delay_between_messages: delay,
+          business_hours_start: businessStart,
+          business_hours_end: businessEnd,
         });
         if (error) throw error;
       }
@@ -236,6 +244,8 @@ export default function Automations() {
     setLimitPerHour(String(motorControl?.max_messages_per_hour ?? 0));
     setLimitPerDay(String(motorControl?.max_messages_per_day ?? 0));
     setDelayBetween(String(motorControl?.delay_between_messages ?? 8));
+    setBusinessStart(motorControl?.business_hours_start ?? "06:00");
+    setBusinessEnd(motorControl?.business_hours_end ?? "01:00");
     setSettingsOpen(!settingsOpen);
   };
 
@@ -311,7 +321,7 @@ export default function Automations() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Limite por Hora</label>
                 <Input
@@ -351,7 +361,32 @@ export default function Automations() {
                   Segundos entre cada envio (anti-spam).
                 </p>
               </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Início do Horário Comercial</label>
+                <Input
+                  type="time"
+                  value={businessStart}
+                  onChange={(e) => setBusinessStart(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Hora a partir da qual o motor pode enviar mensagens.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Término do Horário Comercial</label>
+                <Input
+                  type="time"
+                  value={businessEnd}
+                  onChange={(e) => setBusinessEnd(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Hora limite para envio de mensagens.
+                </p>
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              ⚡ Grupos marcados como <strong>Ofertas Relâmpago</strong> ignoram esta regra e recebem mensagens 24h por dia.
+            </p>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"

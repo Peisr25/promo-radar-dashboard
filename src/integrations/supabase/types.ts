@@ -179,6 +179,8 @@ export type Database = {
       }
       motor_control: {
         Row: {
+          business_hours_end: string | null
+          business_hours_start: string | null
           delay_between_messages: number
           id: string
           is_running: boolean
@@ -192,6 +194,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          business_hours_end?: string | null
+          business_hours_start?: string | null
           delay_between_messages?: number
           id?: string
           is_running?: boolean
@@ -205,6 +209,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          business_hours_end?: string | null
+          business_hours_start?: string | null
           delay_between_messages?: number
           id?: string
           is_running?: boolean
