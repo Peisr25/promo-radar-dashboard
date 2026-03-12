@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2, Square, Settings2, Clock, AlertTriangle, CheckCircle } from "lucide-react";
+import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2, Square, Settings2, Clock, AlertTriangle, CheckCircle, RefreshCw, Info } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { AutomationRuleModal } from "@/components/automations/AutomationRuleModal";
 import { AutomationActivityLog } from "@/components/automations/AutomationActivityLog";
 
@@ -265,15 +266,51 @@ export default function Automations() {
   };
 
   return (
+    <TooltipProvider>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Automações</h1>
-          <p className="text-muted-foreground text-sm">
-            Regras de envio automático para grupos do WhatsApp
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Automações</h1>
+            <p className="text-muted-foreground text-sm">
+              Regras de envio automático para grupos do WhatsApp
+            </p>
+          </div>
+          {isMotorRunning ? (
+            <Badge className="bg-green-600 text-white animate-pulse">
+              Motor em Execução
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              Motor em Espera
+            </Badge>
+          )}
         </div>
         <div className="flex gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={async () => {
+                  try {
+                    const { data: existing } = await supabase.from("motor_control").select("id").maybeSingle();
+                    if (existing) {
+                      await supabase.from("motor_control").update({ is_running: false, updated_at: new Date().toISOString() }).eq("id", existing.id);
+                    }
+                    await supabase.from("raw_scrapes").update({ status: "pending" }).eq("status", "processing");
+                    queryClient.invalidateQueries({ queryKey: ["motor_control"] });
+                    toast({ title: "Sistema destravado com sucesso", description: "Os envios serão retomados na próxima verificação." });
+                  } catch {
+                    toast({ title: "Erro ao destravar", variant: "destructive" });
+                  }
+                }}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Destravar Fila / Motor</TooltipContent>
+          </Tooltip>
           <Button
             variant="ghost"
             size="icon"
@@ -362,25 +399,45 @@ export default function Automations() {
                 </p>
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Início do Horário Comercial</label>
+                <label className="text-sm font-medium flex items-center gap-1">
+                  Início do Horário Comercial
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      Fora deste horário, as ofertas ficam pausadas. Ofertas de grupos Relâmpago furam este bloqueio e são enviadas 24h/dia.
+                    </TooltipContent>
+                  </Tooltip>
+                </label>
                 <Input
                   type="time"
                   value={businessStart}
                   onChange={(e) => setBusinessStart(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Hora a partir da qual o motor pode enviar mensagens.
+                  Horário de Brasília (UTC-3)
                 </p>
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Término do Horário Comercial</label>
+                <label className="text-sm font-medium flex items-center gap-1">
+                  Término do Horário Comercial
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      Fora deste horário, as ofertas ficam pausadas. Ofertas de grupos Relâmpago furam este bloqueio e são enviadas 24h/dia.
+                    </TooltipContent>
+                  </Tooltip>
+                </label>
                 <Input
                   type="time"
                   value={businessEnd}
                   onChange={(e) => setBusinessEnd(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Hora limite para envio de mensagens.
+                  Horário de Brasília (UTC-3)
                 </p>
               </div>
             </div>
@@ -534,5 +591,6 @@ export default function Automations() {
         onOpenChange={setModalOpen}
       />
     </div>
+    </TooltipProvider>
   );
 }
