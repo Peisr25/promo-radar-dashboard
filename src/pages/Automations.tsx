@@ -399,25 +399,45 @@ export default function Automations() {
                 </p>
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Início do Horário Comercial</label>
+                <label className="text-sm font-medium flex items-center gap-1">
+                  Início do Horário Comercial
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      Fora deste horário, as ofertas ficam pausadas. Ofertas de grupos Relâmpago furam este bloqueio e são enviadas 24h/dia.
+                    </TooltipContent>
+                  </Tooltip>
+                </label>
                 <Input
                   type="time"
                   value={businessStart}
                   onChange={(e) => setBusinessStart(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Hora a partir da qual o motor pode enviar mensagens.
+                  Horário de Brasília (UTC-3)
                 </p>
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Término do Horário Comercial</label>
+                <label className="text-sm font-medium flex items-center gap-1">
+                  Término do Horário Comercial
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      Fora deste horário, as ofertas ficam pausadas. Ofertas de grupos Relâmpago furam este bloqueio e são enviadas 24h/dia.
+                    </TooltipContent>
+                  </Tooltip>
+                </label>
                 <Input
                   type="time"
                   value={businessEnd}
                   onChange={(e) => setBusinessEnd(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Hora limite para envio de mensagens.
+                  Horário de Brasília (UTC-3)
                 </p>
               </div>
             </div>
