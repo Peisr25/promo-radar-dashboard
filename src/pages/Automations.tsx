@@ -287,6 +287,30 @@ export default function Automations() {
           )}
         </div>
         <div className="flex gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={async () => {
+                  try {
+                    const { data: existing } = await supabase.from("motor_control").select("id").maybeSingle();
+                    if (existing) {
+                      await supabase.from("motor_control").update({ is_running: false, updated_at: new Date().toISOString() }).eq("id", existing.id);
+                    }
+                    await supabase.from("raw_scrapes").update({ status: "pending" }).eq("status", "processing");
+                    queryClient.invalidateQueries({ queryKey: ["motor_control"] });
+                    toast({ title: "Sistema destravado com sucesso", description: "Os envios serão retomados na próxima verificação." });
+                  } catch {
+                    toast({ title: "Erro ao destravar", variant: "destructive" });
+                  }
+                }}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Destravar Fila / Motor</TooltipContent>
+          </Tooltip>
           <Button
             variant="ghost"
             size="icon"
