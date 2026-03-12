@@ -266,13 +266,25 @@ export default function Automations() {
   };
 
   return (
+    <TooltipProvider>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Automações</h1>
-          <p className="text-muted-foreground text-sm">
-            Regras de envio automático para grupos do WhatsApp
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Automações</h1>
+            <p className="text-muted-foreground text-sm">
+              Regras de envio automático para grupos do WhatsApp
+            </p>
+          </div>
+          {isMotorRunning ? (
+            <Badge className="bg-green-600 text-white animate-pulse">
+              Motor em Execução
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              Motor em Espera
+            </Badge>
+          )}
         </div>
         <div className="flex gap-2">
           <Button
