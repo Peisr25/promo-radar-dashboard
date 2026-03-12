@@ -591,5 +591,6 @@ export default function Automations() {
         onOpenChange={setModalOpen}
       />
     </div>
+    </TooltipProvider>
   );
 }
