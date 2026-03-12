@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2, Square, Settings2, Clock, AlertTriangle, CheckCircle } from "lucide-react";
+import { Bot, Plus, Trash2, Percent, MessageCircle, Play, Loader2, Square, Settings2, Clock, AlertTriangle, CheckCircle, RefreshCw, Info } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { AutomationRuleModal } from "@/components/automations/AutomationRuleModal";
 import { AutomationActivityLog } from "@/components/automations/AutomationActivityLog";
 
